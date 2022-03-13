@@ -7,25 +7,31 @@ From this, we derive "blarg":
 * **arg** for argument parser.
 * **bl**arg 1) because all the other names are already taken, and 2) since all the other names are already taken, why is that none of them do what *I want*? (said with no small amount of sarcasm/self-deprecation)
 
-So then, what should a command line argument parser look like?
-As far as I know, I subscribe to the de-factor unix-like standard for CLI design, from which argument parser structure follows.
-I haven't read [this whole guide](https://clig.dev), but a quick skim seems to align with my position.
-As an interesting aside, that guide encourages using a library, mentioning two such Rust libraries - both of which do not satisfy other interface level paradigms stated in that guide.
-Anyways, aside from what I think are the obvious standards (provide help via `-h`, `--help`, return `0` on success and `non-zero` on error, etc), these are my primary concerns:
+### CLI Design
+In terms of what I believe a command line argument parser should look like, it probably makes sense to step back to what I believe is good CLI design.
+As far as I know, I subscribe to the unix-like, perhaps mid-to-older school standard for CLI design.
+[This guide](https://clig.dev) provides a good sketch, but I should clarify it does not wholly align with my position on CLI design.
+Aside from what I think are the obvious standards (provide help via `-h`, `--help`, return `0` on success and `non-zero` on error, etc), these are my primary concerns:
 
 * Arguments are *required* parameters to the CLI.
 They are always positional.
 Their order is important to the program semantics.
 They are never specified via some key.
-Example: `mkdir NAME`
-* Options are the *optional* parameters to the CLI.
-They are specified via "single-dash single-char" or "double-dash word" keys, and may accept values or indicate flags (implicit bool value).
+Example: `'mkdir NAME'`
+* Options (aka: flags) are the *optional* parameters to the CLI.
+They are specified via "single-dash single-char" or "double-dash word" keys, and may accept values or indicate flags (implicit boolean value).
 Their order is not important to the program semantics.
-Example: `mkdir [-p] ..` or `mkdir [-m MODE] ..` or `diff [-i | --ignore-case] ..`
+Example: `'mkdir [-p] ..'` or `'mkdir [-m MODE] ..'` or `'diff [-i | --ignore-case] ..'`
+* To re-iterate, the required parameters to a CLI are always described via positional arguments.
+The optional parameters to the CLI are always described via key-value pair.
+* Sometimes, arguments or options take some number of parameters.
+The CLI should present this semantic clearly, and produce an error when encountering an invalid number.
+* When the CLI arguments and/or options becomes too confusing to effectivley use, this is an indication that the CLI needs re-design.
+There are two common re-design patterns:
+    1. Use configuration file(s).
+    2. Break the CLI into smaller point-focused CLIs.
+       This can be done via use of separate CLI binaries, or via sub-command structure (ex: `'git add ..'` and `'git commit ..'`).
 
-Honestly, if any of the Rust libraries adhered to this requirements I could probably live with any fallout idiosyncrasies.
-None that I have found do that, or at least do that by default (I'll admit, perhaps there is some flag I haven't found).
-
-I may come back to add more requirements in the future.
+### Blarg Api
 For now, I'll be happy to provide a Rust-like type-safe implementation of the above.
 
