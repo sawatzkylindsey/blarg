@@ -29,6 +29,32 @@ where
     }
 }
 
+pub struct FieldReferenceVec<'ap, T: 'ap + FromStr>
+where
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    variable: Rc<RefCell<&'ap mut Vec<T>>>,
+}
+
+impl<'ap, T: FromStr> FieldReferenceVec<'ap, T>
+where
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn new(variable: &'ap mut Vec<T>) -> Self {
+        Self {
+            variable: Rc::new(RefCell::new(variable)),
+        }
+    }
+
+    pub fn add(&mut self, value: T) {
+        (**self.variable.borrow_mut()).push(value);
+    }
+
+    pub fn add_from(&mut self, str_value: &str) {
+        self.add(T::from_str(str_value).unwrap())
+    }
+}
+
 #[derive(TypedBuilder)]
 pub struct Field<'ap, T: 'ap + FromStr>
 where
@@ -94,10 +120,24 @@ mod tests {
 
     #[test]
     fn field_reference_from_str() {
+        // Integer
         let mut variable: u32 = u32::default();
         let mut field_reference = FieldReference::new(&mut variable);
         field_reference.set_from("5");
         assert_eq!(variable, 5);
+
+        // Boolean
+        let mut variable: bool = false;
+        let mut field_reference = FieldReference::new(&mut variable);
+        field_reference.set_from("true");
+        assert!(variable);
+
+        // Boolean
+        let mut variable: Vec<u32> = Vec::default();
+        let mut field_reference = FieldReferenceVec::new(&mut variable);
+        field_reference.add_from("1");
+        field_reference.add_from("0");
+        assert_eq!(variable, vec![1, 0]);
     }
 
     #[test]
