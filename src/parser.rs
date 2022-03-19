@@ -1,7 +1,11 @@
+use std::env;
 use std::cell::RefCell;
+use std::collections::HashSet;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::str::FromStr;
 use typed_builder::TypedBuilder;
+use thiserror::Error;
 
 pub struct FieldReference<'ap, T: 'ap + FromStr>
 where
@@ -29,30 +33,66 @@ where
     }
 }
 
-pub struct FieldReferenceVec<'ap, T: 'ap + FromStr>
-where
-    <T as FromStr>::Err: std::fmt::Debug,
-{
-    variable: Rc<RefCell<&'ap mut Vec<T>>>,
+pub trait Collection<T> {
+    fn add(&mut self, item: T) -> Result<(), ()>;
 }
 
-impl<'ap, T: FromStr> FieldReferenceVec<'ap, T>
+impl<T> Collection<T> for Vec<T> {
+    fn add(&mut self, item: T) -> Result<(), ()> {
+        self.push(item);
+        Ok(())
+    }
+}
+
+impl<T: std::cmp::Eq + std::hash::Hash> Collection<T> for HashSet<T> {
+    fn add(&mut self, item: T) -> Result<(), ()> {
+        self.insert(item);
+        Ok(())
+    }
+}
+
+pub struct FieldReferenceCollection<'ap, C, T>
 where
+    C: 'ap + Collection<T>,
+    T: FromStr,
+{
+    variable: Rc<RefCell<&'ap mut C>>,
+    _phantom: PhantomData<T>,
+}
+
+impl<'ap, C, T> FieldReferenceCollection<'ap, C, T>
+where
+    C: 'ap + Collection<T>,
+    T: FromStr,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    pub fn new(variable: &'ap mut Vec<T>) -> Self {
+    pub fn new(variable: &'ap mut C) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
+            _phantom: PhantomData,
         }
     }
 
     pub fn add(&mut self, value: T) {
-        (**self.variable.borrow_mut()).push(value);
+        (**self.variable.borrow_mut()).add(value);
     }
 
-    pub fn add_from(&mut self, str_value: &str) {
-        self.add(T::from_str(str_value).unwrap())
+    pub fn add_from(&mut self, str_value: &str) -> Result<(), ParseError<T>> {
+        let item = T::from_str(str_value)
+            .map_err(|e| ParseError::FromStrError(e))?;
+        self.add(item);
+        Ok(())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum ParseError<T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    #[error("Encountered error while parsing from_str: {0:?}.")]
+    FromStrError(<T as FromStr>::Err),
 }
 
 #[derive(TypedBuilder)]
@@ -99,11 +139,16 @@ impl<'ap> ArgumentParser<'ap> {
     }
 
     pub fn capture(self, value: &str) {
-        println!("{}", self.name);
         for mut box_capture in self.options {
             box_capture.capture(value).unwrap();
         }
     }
+
+    /*pub fn parse(self) {
+        for arg in env::args() {
+            println!("{}", arg);
+        }
+    }*/
 }
 
 #[cfg(test)]
@@ -132,12 +177,21 @@ mod tests {
         field_reference.set_from("true");
         assert!(variable);
 
-        // Boolean
+        // Vec<u32>
         let mut variable: Vec<u32> = Vec::default();
-        let mut field_reference = FieldReferenceVec::new(&mut variable);
+        let mut field_reference = FieldReferenceCollection::new(&mut variable);
         field_reference.add_from("1");
         field_reference.add_from("0");
         assert_eq!(variable, vec![1, 0]);
+
+        // HashSet<u32>
+        let mut variable: HashSet<u32> = HashSet::default();
+        let mut field_reference = FieldReferenceCollection::new(&mut variable);
+        field_reference.add_from("1");
+        field_reference.add_from("0");
+        field_reference.add_from("0");
+        // It is driving me insane that `HashSet::from([0, 1])` isn't working here!
+        assert_eq!(variable, vec![0, 1].into_iter().collect());
     }
 
     #[test]
