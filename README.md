@@ -35,3 +35,10 @@ There are two common re-design patterns:
 ### Blarg Api
 For now, I'll be happy to provide a Rust-like type-safe implementation of the above.
 
+### Development
+
+    cargo build
+    cargo test
+
+    ./target/debug/examples/reducer -h
+

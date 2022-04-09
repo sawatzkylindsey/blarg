@@ -1,10 +1,9 @@
-use std::env;
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::env;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::str::FromStr;
-use typed_builder::TypedBuilder;
 use thiserror::Error;
 
 pub struct FieldReference<'ap, T: 'ap + FromStr>
@@ -23,13 +22,19 @@ where
             variable: Rc::new(RefCell::new(variable)),
         }
     }
+}
 
-    pub fn set(&mut self, value: T) {
+impl<'ap, T> TypeCapture<'ap, T> for FieldReference<'ap, T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn capture(&mut self, value: T) {
         **self.variable.borrow_mut() = value;
     }
 
-    pub fn set_from(&mut self, str_value: &str) {
-        self.set(T::from_str(str_value).unwrap())
+    fn capture_from(&mut self, str_value: &str) {
+        self.capture(T::from_str(str_value).unwrap())
     }
 }
 
@@ -72,20 +77,27 @@ where
             _phantom: PhantomData,
         }
     }
+}
 
-    pub fn add(&mut self, value: T) {
-        (**self.variable.borrow_mut()).add(value);
+impl<'ap, C, T> TypeCapture<'ap, T> for FieldReferenceCollection<'ap, C, T>
+where
+    C: 'ap + Collection<T>,
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn capture(&mut self, value: T) {
+        (**self.variable.borrow_mut()).add(value).unwrap();
     }
 
-    pub fn add_from(&mut self, str_value: &str) -> Result<(), ParseError<T>> {
-        let item = T::from_str(str_value)
-            .map_err(|e| ParseError::FromStrError(e))?;
-        self.add(item);
-        Ok(())
+    fn capture_from(&mut self, str_value: &str) {
+        let result: Result<T, ParseError<T>> =
+            T::from_str(str_value).map_err(|e| ParseError::FromStrError(e));
+        let item = result.unwrap();
+        self.capture(item);
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error)]
 pub enum ParseError<T>
 where
     T: FromStr,
@@ -95,12 +107,49 @@ where
     FromStrError(<T as FromStr>::Err),
 }
 
-#[derive(TypedBuilder)]
+// There is a bug/limitation with the #[derive(Debug)] for this case.
+// So simply implement it ourselves.
+impl<T> std::fmt::Debug for ParseError<T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 pub struct Field<'ap, T: 'ap + FromStr>
 where
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    reference: FieldReference<'ap, T>,
+    reference: Box<dyn TypeCapture<'ap, T> + 'ap>,
+}
+
+impl<'ap, T> Field<'ap, T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn scalar(reference: FieldReference<'ap, T>) -> Self {
+        Self {
+            reference: Box::new(reference),
+        }
+    }
+}
+
+impl<'ap, T> Field<'ap, T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn collection<C: 'ap + Collection<T>>(
+        reference: FieldReferenceCollection<'ap, C, T>,
+    ) -> Self {
+        Self {
+            reference: Box::new(reference),
+        }
+    }
 }
 
 impl<'ap, T: 'ap + FromStr> Capture for Field<'ap, T>
@@ -108,9 +157,14 @@ where
     <T as FromStr>::Err: std::fmt::Debug,
 {
     fn capture(&mut self, value: &str) -> Result<(), ()> {
-        self.reference.set_from(value);
+        self.reference.capture_from(value);
         Ok(())
     }
+}
+
+trait TypeCapture<'ap, T> {
+    fn capture(&mut self, value: T);
+    fn capture_from(&mut self, str_value: &str);
 }
 
 pub trait Capture {
@@ -119,7 +173,17 @@ pub trait Capture {
 
 pub struct ArgumentParser<'ap> {
     name: &'ap str,
+    // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
+    // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
     options: Vec<Box<(dyn Capture + 'ap)>>,
+}
+
+impl<'ap> std::fmt::Debug for ArgumentParser<'ap> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArgumentParser")
+            .field("name", &self.name)
+            .finish()
+    }
 }
 
 impl<'ap> ArgumentParser<'ap> {
@@ -144,11 +208,11 @@ impl<'ap> ArgumentParser<'ap> {
         }
     }
 
-    /*pub fn parse(self) {
+    pub fn parse(self) {
         for arg in env::args() {
             println!("{}", arg);
         }
-    }*/
+    }
 }
 
 #[cfg(test)]
@@ -159,7 +223,7 @@ mod tests {
     fn field_reference() {
         let mut variable: u32 = u32::default();
         let mut field_reference = FieldReference::new(&mut variable);
-        field_reference.set(5);
+        field_reference.capture(5);
         assert_eq!(variable, 5);
     }
 
@@ -168,28 +232,28 @@ mod tests {
         // Integer
         let mut variable: u32 = u32::default();
         let mut field_reference = FieldReference::new(&mut variable);
-        field_reference.set_from("5");
+        field_reference.capture_from("5");
         assert_eq!(variable, 5);
 
         // Boolean
         let mut variable: bool = false;
         let mut field_reference = FieldReference::new(&mut variable);
-        field_reference.set_from("true");
+        field_reference.capture_from("true");
         assert!(variable);
 
         // Vec<u32>
         let mut variable: Vec<u32> = Vec::default();
         let mut field_reference = FieldReferenceCollection::new(&mut variable);
-        field_reference.add_from("1");
-        field_reference.add_from("0");
+        field_reference.capture_from("1");
+        field_reference.capture_from("0");
         assert_eq!(variable, vec![1, 0]);
 
         // HashSet<u32>
         let mut variable: HashSet<u32> = HashSet::default();
         let mut field_reference = FieldReferenceCollection::new(&mut variable);
-        field_reference.add_from("1");
-        field_reference.add_from("0");
-        field_reference.add_from("0");
+        field_reference.capture_from("1");
+        field_reference.capture_from("0");
+        field_reference.capture_from("0");
         // It is driving me insane that `HashSet::from([0, 1])` isn't working here!
         assert_eq!(variable, vec![0, 1].into_iter().collect());
     }
@@ -198,21 +262,28 @@ mod tests {
     fn field_reference_overwritten() {
         let mut variable: u32 = u32::default();
         let mut field_reference = FieldReference::new(&mut variable);
-        field_reference.set(5);
+        field_reference.capture(5);
         variable = 2;
         assert_eq!(variable, 2);
     }
 
     #[test]
-    fn ap_capture() {
+    fn ap_capture_scalar() {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = u32::default();
-        ap.add_option(
-            Field::builder()
-                .reference(FieldReference::new(&mut variable))
-                .build(),
-        )
-        .capture("7");
+        ap.add_option(Field::scalar(FieldReference::new(&mut variable)))
+            .capture("7");
         assert_eq!(variable, 7);
+    }
+
+    #[test]
+    fn ap_capture_collection() {
+        let ap = ArgumentParser::new("abc");
+        let mut variable: Vec<u32> = Vec::default();
+        ap.add_option(Field::collection(FieldReferenceCollection::new(
+            &mut variable,
+        )))
+        .capture("7");
+        assert_eq!(variable, vec![7]);
     }
 }

@@ -1,5 +1,5 @@
+use blarg::parser::{ArgumentParser, Field, FieldReference, FieldReferenceCollection};
 use std::str::FromStr;
-use blarg::parser::{ArgumentParser};
 
 #[derive(Debug)]
 enum Operand {
@@ -11,38 +11,29 @@ impl FromStr for Operand {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_lowercase() {
+        match value.to_lowercase().as_str() {
             "add" => Ok(Operand::Add),
             "multiply" => Ok(Operand::Multiply),
-            _ => Err(format!("unknown: {}", value))
+            _ => Err(format!("unknown: {}", value)),
         }
     }
 }
 
 fn main() {
-    let verbose: bool = false;
-    let operand: Operand = Operand::Add;
-    let initial: Option<u32> = None;
-    let items: Vec<u32> = Vec::new();
+    let mut verbose: bool = false;
+    let mut operand: Operand = Operand::Add;
+    let mut _initial: Option<u32> = None;
+    let mut items: Vec<u32> = Vec::new();
 
-    let mut ap = ArgumentParser::new();
-    ap.add_option(Field::builder()
-        .reference(FieldReference::new(&mut verbose))
-        .build(),
-    );
-    ap.add_option(Field::builder()
-        .reference(FieldReference::new(&mut operand))
-        .build(),
-    );
-    ap.add_option(Field::builder()
+    let mut ap = ArgumentParser::new("reducer");
+    println!("{:?}", ap);
+    ap = ap
+        .add_option(Field::scalar(FieldReference::new(&mut verbose)))
+        .add_option(Field::scalar(FieldReference::new(&mut operand)));
+    /*ap.add_option(Field::builder()
         .reference(FieldReference::new(&mut initial))
         .build(),
-    );
-    ap.add_argument(
-        Field::builder()
-            .reference(FieldReferenceCollection::new(&mut items))
-            .build(),
-    );
-    ap.parse();
+    );*/
+    ap.add_option(Field::collection(FieldReferenceCollection::new(&mut items)))
+        .parse();
 }
-
