@@ -22,7 +22,7 @@ impl FromStr for Operand {
 fn main() {
     let mut verbose: bool = false;
     let mut operand: Operand = Operand::Add;
-    let mut _initial: Option<u32> = None;
+    let mut initial: Option<u32> = None;
     let mut items: Vec<u32> = Vec::new();
 
     let mut ap = ArgumentParser::new("reducer");
@@ -30,10 +30,7 @@ fn main() {
     ap = ap
         .add_option(Field::scalar(FieldReference::new(&mut verbose)))
         .add_option(Field::scalar(FieldReference::new(&mut operand)));
-    /*ap.add_option(Field::builder()
-        .reference(FieldReference::new(&mut initial))
-        .build(),
-    );*/
     ap.add_option(Field::collection(FieldReferenceCollection::new(&mut items)))
+        .add_option(Field::any(FieldReferenceCollection::new(&mut initial)))
         .parse();
 }

@@ -6,16 +6,16 @@ use std::rc::Rc;
 use std::str::FromStr;
 use thiserror::Error;
 
-pub struct FieldReference<'ap, T: 'ap + FromStr>
-where
-    <T as FromStr>::Err: std::fmt::Debug,
+pub struct FieldReference<'ap, T: 'ap>
+//where
+//    <T as FromStr>::Err: std::fmt::Debug,
 {
     variable: Rc<RefCell<&'ap mut T>>,
 }
 
 impl<'ap, T: FromStr> FieldReference<'ap, T>
-where
-    <T as FromStr>::Err: std::fmt::Debug,
+//where
+//    <T as FromStr>::Err: std::fmt::Debug,
 {
     pub fn new(variable: &'ap mut T) -> Self {
         Self {
@@ -38,6 +38,55 @@ where
     }
 }
 
+/*pub struct FieldReferenceOption<'ap, T: 'ap + FromStr>
+//where
+//    <T as FromStr>::Err: std::fmt::Debug,
+{
+    variable: Rc<RefCell<&'ap mut Option<T>>>,
+}
+
+impl<'ap, T: FromStr> FieldReferenceOption<'ap, T>
+//where
+//    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn new(variable: &'ap mut Option<T>) -> Self {
+        Self {
+            variable: Rc::new(RefCell::new(variable)),
+        }
+    }
+}
+
+impl<'ap, T> TypeCapture<'ap, Option<T>> for FieldReferenceOption<'ap, T>
+//where
+//    T: FromStr,
+//    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn capture(&mut self, value: Option<T>) {
+        **self.variable.borrow_mut() = value;
+    }
+
+    fn capture_from(&mut self, str_value: &str) {
+        self.capture(Some(T::from_str(str_value).unwrap()))
+    }
+}
+
+type OptionT<T> = Option<T>;
+*/
+/*
+impl<'ap, T> TypeCapture<'ap, T> for Option<T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn capture(&mut self, value: T) {
+        std::mem::replace(self, value);
+    }
+
+    fn capture_from(&mut self, str_value: &str) {
+        self.capture(Some(T::from_str(str_value).unwrap()))
+    }
+}*/
+
 pub trait Collection<T> {
     fn add(&mut self, item: T) -> Result<(), ()>;
 }
@@ -56,10 +105,39 @@ impl<T: std::cmp::Eq + std::hash::Hash> Collection<T> for HashSet<T> {
     }
 }
 
+impl<T> Collection<T> for Option<T> {
+    fn add(&mut self, item: T) -> Result<(), ()> {
+        if self.is_none() {
+            self.replace(item);
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+}
+
+/*struct Optional<T> {
+    items: Vec<T>,
+}*/
+
+/*impl<T> Collection<T> for Option<T> {
+    fn add(&mut self, item: T) -> Result<(), ()> {
+        let mut value = Some(item);
+        std::mem::replace(&mut self, &mut value);
+        Ok(())
+        /*if !self.items.is_empty() {
+            Err(())
+        } else {
+            self.items.add(item);
+            Ok(())
+        }*/
+    }
+}*/
+
 pub struct FieldReferenceCollection<'ap, C, T>
 where
     C: 'ap + Collection<T>,
-    T: FromStr,
+//    T: FromStr,
 {
     variable: Rc<RefCell<&'ap mut C>>,
     _phantom: PhantomData<T>,
@@ -68,8 +146,8 @@ where
 impl<'ap, C, T> FieldReferenceCollection<'ap, C, T>
 where
     C: 'ap + Collection<T>,
-    T: FromStr,
-    <T as FromStr>::Err: std::fmt::Debug,
+//    T: FromStr,
+//    <T as FromStr>::Err: std::fmt::Debug,
 {
     pub fn new(variable: &'ap mut C) -> Self {
         Self {
@@ -119,11 +197,24 @@ where
     }
 }
 
-pub struct Field<'ap, T: 'ap + FromStr>
-where
-    <T as FromStr>::Err: std::fmt::Debug,
+pub struct Field<'ap, T: 'ap>
+/*where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,*/
 {
     reference: Box<dyn TypeCapture<'ap, T> + 'ap>,
+}
+
+impl<'ap, T> Field<'ap, T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn any(reference: impl TypeCapture<'ap, T> + 'ap) -> Self {
+        Self {
+            reference: Box::new(reference),
+        }
+    }
 }
 
 impl<'ap, T> Field<'ap, T>
@@ -152,8 +243,9 @@ where
     }
 }
 
-impl<'ap, T: 'ap + FromStr> Capture for Field<'ap, T>
+impl<'ap, T> Capture for Field<'ap, T>
 where
+    T: FromStr,
     <T as FromStr>::Err: std::fmt::Debug,
 {
     fn capture(&mut self, value: &str) -> Result<(), ()> {
@@ -162,7 +254,11 @@ where
     }
 }
 
-trait TypeCapture<'ap, T> {
+pub trait TypeCapture<'ap, T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
     fn capture(&mut self, value: T);
     fn capture_from(&mut self, str_value: &str);
 }
@@ -194,8 +290,9 @@ impl<'ap> ArgumentParser<'ap> {
         }
     }
 
-    pub fn add_option<T: FromStr>(mut self, field: Field<'ap, T>) -> Self
+    pub fn add_option<T>(mut self, field: Field<'ap, T>) -> Self
     where
+        T: FromStr,
         <T as FromStr>::Err: std::fmt::Debug,
     {
         self.options.push(Box::new(field));
@@ -271,16 +368,25 @@ mod tests {
     fn ap_capture_scalar() {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = u32::default();
-        ap.add_option(Field::scalar(FieldReference::new(&mut variable)))
+        ap.add_option(Field::any(FieldReference::new(&mut variable)))
             .capture("7");
         assert_eq!(variable, 7);
+    }
+
+    #[test]
+    fn ap_capture_option() {
+        let ap = ArgumentParser::new("abc");
+        let mut variable: Option<u32> = None;
+        ap.add_option(Field::any(FieldReferenceCollection::new(&mut variable)))
+            .capture("7");
+        assert_eq!(variable, Some(7));
     }
 
     #[test]
     fn ap_capture_collection() {
         let ap = ArgumentParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
-        ap.add_option(Field::collection(FieldReferenceCollection::new(
+        ap.add_option(Field::any(FieldReferenceCollection::new(
             &mut variable,
         )))
         .capture("7");
