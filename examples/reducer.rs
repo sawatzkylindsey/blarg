@@ -1,4 +1,5 @@
-use blarg::parser::{ArgumentParser, Field, FieldReference, FieldReferenceCollection};
+use blarg::field::{Container, Field, Value};
+use blarg::parser::ArgumentParser;
 use std::str::FromStr;
 
 #[derive(Debug)]
@@ -28,9 +29,9 @@ fn main() {
     let mut ap = ArgumentParser::new("reducer");
     println!("{:?}", ap);
     ap = ap
-        .add_option(Field::scalar(FieldReference::new(&mut verbose)))
-        .add_option(Field::scalar(FieldReference::new(&mut operand)));
-    ap.add_option(Field::collection(FieldReferenceCollection::new(&mut items)))
-        .add_option(Field::any(FieldReferenceCollection::new(&mut initial)))
-        .parse();
+        .add_option(Field::binding(Value::new(&mut verbose)))
+        .add_option(Field::binding(Value::new(&mut operand)))
+        .add_option(Field::binding(Container::new(&mut initial)))
+        .add_option(Field::binding(Container::new(&mut items)));
+    ap.parse();
 }
