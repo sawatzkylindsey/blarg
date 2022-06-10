@@ -32,6 +32,8 @@ fn main() {
         .add_option(Field::binding(Value::new(&mut verbose)))
         .add_option(Field::binding(Value::new(&mut operand)))
         .add_option(Field::binding(Container::new(&mut initial)))
-        .add_option(Field::binding(Container::new(&mut items)));
+        .add_argument(Field::binding(Container::new(&mut items)));
     ap.parse();
+
+    println!("Reducer: {items:?}");
 }

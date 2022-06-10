@@ -1,13 +1,16 @@
+use std::collections::VecDeque;
 use std::env;
 use std::str::FromStr;
 
 use crate::field::*;
+use crate::tokens::*;
 
 pub struct ArgumentParser<'ap> {
     name: &'ap str,
     // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
     // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
     options: Vec<Box<(dyn Capturable + 'ap)>>,
+    arguments: Vec<Box<(dyn Capturable + 'ap)>>,
 }
 
 impl<'ap> std::fmt::Debug for ArgumentParser<'ap> {
@@ -23,6 +26,7 @@ impl<'ap> ArgumentParser<'ap> {
         Self {
             name,
             options: Vec::new(),
+            arguments: Vec::new(),
         }
     }
 
@@ -35,16 +39,47 @@ impl<'ap> ArgumentParser<'ap> {
         self
     }
 
+    pub fn add_argument<T>(mut self, field: Field<'ap, T>) -> Self
+    where
+        T: FromStr,
+        <T as FromStr>::Err: std::fmt::Debug,
+    {
+        self.arguments.push(Box::new(field));
+        self
+    }
+
     pub fn capture(self, value: &str) {
         for mut box_capture in self.options {
             box_capture.capture(value).unwrap();
         }
     }
 
+    fn token_parser(&self) -> TokenParser {
+        todo!()
+    }
+
     pub fn parse(self) {
-        for arg in env::args() {
-            println!("{}", arg);
+        let mut token_parser = self.token_parser();
+
+        for (i, next) in env::args().enumerate() {
+            println!("{i}: {next}");
+            token_parser.feed(&next).unwrap();
         }
+
+        /*for (name, parts) in token_parser.matches() {
+            println!("{name}: {parts:?}");
+        }*/
+
+        /*let mut inputs: VecDeque<String> = env::args().collect();
+        //let mut argument_index = 0;
+        //let mut buffer: Vec<String> = Vec::default();
+
+        loop {
+            if let Some(next) = args.pop_front() {
+            } else {
+                break;
+            }
+        }*/
     }
 }
 

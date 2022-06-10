@@ -8,3 +8,5 @@ edition = "2018"
 [dependencies]
 thiserror = "^1.0"
 
+[dev-dependencies]
+rstest = "^0.12"
