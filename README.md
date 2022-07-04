@@ -1,17 +1,23 @@
 # blarg
+`blarg` is an opinionated command line argument parser for Rust.
+Although there are other suitable argument parser crates, in my experience they center around CLI/UX paradigms that differ from what I desire in an argument parser.
+If you are happy with the other argument parser libraries in Rust, I would highly recommend using them instead of this one.
+Otherwise, read on.
 
-`blarg` is a command line argument parser, suited to this developer's opinions about what such a tool/library should look like.
-Although there are many other argument parsers in Rust, I haven't quite found one that does precisely what I want.
-This isn't to say the other parsers aren't good; rather, the other parsers don't suffice my particular compulsions about argument parsing.
-From this, we derive "blarg":
+"blarg" is derived from the following:
 * **arg** for argument parser.
-* **bl**arg 1) because all the other names are already taken, and 2) since all the other names are already taken, why is that none of them do what *I want*? (said with no small amount of sarcasm/self-deprecation)
+* **bl**arg because all the other names are already taken.
 
-### CLI Design
-In terms of what I believe a command line argument parser should look like, it probably makes sense to step back to what I believe is good CLI design.
-As far as I know, I subscribe to the unix-like, perhaps mid-to-older school standard for CLI design.
-[This guide](https://clig.dev) provides a good sketch, but I should clarify it does not wholly align with my position on CLI design.
-Aside from what I think are the obvious standards (provide help via `-h`, `--help`, return `0` on success and `non-zero` on error, etc), these are my primary concerns:
+### CLI Paradigm
+The CLI design this parser aims to achieve follows a unix-like standard (if one were to exist).
+Of course, CLI design has changed much over the years - I won't attempt to point to a specific period and say *this* is what `blarg` provides.
+Nevertheless, let's flesh this out a little.
+
+Our target CLI design is inspired primary by Python's [ArgumentParser](https://docs.python.org/3/library/argparse.html).
+To be clear, the functionaly and UX provided by `ArgumentParser` can be used as a rough guideline for the functionality and UX provided by `blarg`.
+However, the programmatic interface may vary significantly.
+[This guide](https://clig.dev) provides another reasonable sketch for our target CLI design, but to be clear does not wholly align with `blarg`'s position.
+Aside from what are probably straightforward standards (provide help via `-h`, `--help`, return `0` on success and `non-zero` on error, etc), these are `blarg`'s primary concerns:
 
 * Arguments are *required* parameters to the CLI.
 They are always positional.
@@ -19,7 +25,7 @@ Their order is important to the program semantics.
 They are never specified via some key.
 Example: `'mkdir NAME'`
 * Options (aka: flags) are the *optional* parameters to the CLI.
-They are specified via "single-dash single-char" or "double-dash word" keys, and may accept values or indicate flags (implicit boolean value).
+They are specified via "single-dash single-char" or "double-dash word" keys, and may accept values or indicate flags (the implicit boolean value).
 Their order is not important to the program semantics.
 Example: `'mkdir [-p] ..'` or `'mkdir [-m MODE] ..'` or `'diff [-i | --ignore-case] ..'`
 * To re-iterate, the required parameters to a CLI are always described via positional arguments.
@@ -33,7 +39,11 @@ There are two common re-design patterns:
        This can be done via use of separate CLI binaries, or via sub-command structure (ex: `'git add ..'` and `'git commit ..'`).
 
 ### Blarg Api
-For now, I'll be happy to provide a Rust-like type-safe implementation of the above.
+The `blarg` Api is a work in progress.
+In principle, we provide a reasonably idiomatic and type-safe interface for the above CLI paradigm.
+It should be straightforward to program arguments, options and sub-comands with the mentioned semantics.
+On the other hand, semantics outside of the CLI paradigm should be difficult/impossible within the `blarg` Api.
+For example, the `blarg` Api does not allow for a required parameter to be specified via option syntax.
 
 ### Development
 
