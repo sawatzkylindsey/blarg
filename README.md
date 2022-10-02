@@ -23,11 +23,11 @@ Aside from what are probably straightforward standards (provide help via `-h`, `
 They are always positional.
 Their order is important to the program semantics.
 They are never specified via some key.
-Example: `'mkdir NAME'`
-* Options (aka: flags) are the *optional* parameters to the CLI.
+Example of an argument: `'mkdir NAME'`
+* Options are the *optional* parameters to the CLI.
 They are specified via "single-dash single-char" or "double-dash word" keys, and may accept values or indicate flags (the implicit boolean value).
 Their order is not important to the program semantics.
-Example: `'mkdir [-p] ..'` or `'mkdir [-m MODE] ..'` or `'diff [-i | --ignore-case] ..'`
+Example of an option: `'mkdir [-p] ..'` or `'mkdir [-m MODE] ..'` or `'diff [-i | --ignore-case] ..'`
 * To re-iterate, the required parameters to a CLI are always described via positional arguments.
 The optional parameters to the CLI are always described via key-value pair.
 * Sometimes, arguments or options take some number of parameters.
