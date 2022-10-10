@@ -10,7 +10,7 @@ use crate::collection::*;
 /// Inspired by argparse: <https://docs.python.org/3/library/argparse.html#nargs>
 ///
 /// Notice, this isn't used directly on the user interface.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[doc(hidden)]
 pub enum Nargs {
     /// N: Limited by precisely `N` values.
@@ -29,30 +29,67 @@ pub(crate) trait Nargable {
 ///
 /// We use this at the bottom of the argument parser object graph so the compiler can maintain each field's type.
 #[doc(hidden)]
-pub trait TypeCapturable<'ap, T>
+pub trait GenericCapturable<'ap, T>
 where
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
     /// Declare that the parameter has been matched.
-    fn matched_generic(&mut self);
+    fn matched(&mut self);
 
     /// Capture a value into the generic type T for this parameter.
-    fn capture_generic(&mut self, str_value: &str);
+    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>>;
 
     /// Get the `Nargs` for this implementation.
     fn nargs(&self) -> Nargs;
 }
 
+#[derive(Debug, Error)]
+pub enum GenericCaptureError<T>
+where
+    T: FromStr + std::fmt::Debug,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    #[error("Parse error during capture: {0:?}.")]
+    FromStrError(<T as FromStr>::Err),
+
+    #[error("The capture is prohibited.")]
+    ProhibitedCapture,
+}
+
 /// Behaviour to capture an implicit generic type T from an input `&str`.
 ///
 /// We use this at the middle/top of the argument parser object graph so that different types may all be 'captured' in a single argument parser.
-pub trait Capturable {
+pub trait AnonymousCapturable {
     /// Declare that the parameter has been matched.
-    fn matched_anonymous(&mut self);
+    fn matched(&mut self);
 
     /// Capture a value anonymously for this parameter.
-    fn capture_anonymous(&mut self, value: &str) -> Result<(), ()>;
+    fn capture(&mut self, value: &str) -> Result<(), AnonymousCaptureError>;
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AnonymousCaptureError {
+    #[error("{0}")]
+    FromStrError(String),
+
+    #[error("The capture is prohibited.")]
+    ProhibitedCapture,
+}
+
+impl<T> From<GenericCaptureError<T>> for AnonymousCaptureError
+where
+    T: FromStr + std::fmt::Debug,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn from(error: GenericCaptureError<T>) -> Self {
+        match error {
+            GenericCaptureError::FromStrError(_) => {
+                AnonymousCaptureError::FromStrError(format!("{error:?}"))
+            }
+            GenericCaptureError::ProhibitedCapture => AnonymousCaptureError::ProhibitedCapture,
+        }
+    }
 }
 
 /// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
@@ -60,7 +97,7 @@ pub struct Value<'ap, T: 'ap> {
     variable: Rc<RefCell<&'ap mut T>>,
 }
 
-impl<'ap, T: FromStr> Value<'ap, T> {
+impl<'ap, T: FromStr + std::fmt::Debug> Value<'ap, T> {
     pub fn new(variable: &'ap mut T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -68,18 +105,21 @@ impl<'ap, T: FromStr> Value<'ap, T> {
     }
 }
 
-impl<'ap, T> TypeCapturable<'ap, T> for Value<'ap, T>
+impl<'ap, T> GenericCapturable<'ap, T> for Value<'ap, T>
 where
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    fn matched_generic(&mut self) {
+    fn matched(&mut self) {
         // Do nothing.
     }
 
-    fn capture_generic(&mut self, str_value: &str) {
-        let value = T::from_str(str_value).unwrap();
+    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>> {
+        let result: Result<T, GenericCaptureError<T>> =
+            T::from_str(str_value).map_err(|e| GenericCaptureError::FromStrError(e));
+        let value = result?;
         **self.variable.borrow_mut() = value;
+        Ok(())
     }
 
     fn nargs(&self) -> Nargs {
@@ -102,7 +142,7 @@ pub struct Switch<'ap, T: 'ap> {
     target: Option<T>,
 }
 
-impl<'ap, T: FromStr> Switch<'ap, T> {
+impl<'ap, T: FromStr + std::fmt::Debug> Switch<'ap, T> {
     pub fn new(variable: &'ap mut T, target: T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -111,17 +151,20 @@ impl<'ap, T: FromStr> Switch<'ap, T> {
     }
 }
 
-impl<'ap, T> TypeCapturable<'ap, T> for Switch<'ap, T>
+impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T>
 where
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    fn matched_generic(&mut self) {
-        **self.variable.borrow_mut() = self.target.take().unwrap();
+    fn matched(&mut self) {
+        **self.variable.borrow_mut() = self
+            .target
+            .take()
+            .expect("Must be able to take the Switch#target.");
     }
 
-    fn capture_generic(&mut self, _str_value: &str) {
-        panic!("cannot capture on switch");
+    fn capture(&mut self, _str_value: &str) -> Result<(), GenericCaptureError<T>> {
+        Err(GenericCaptureError::ProhibitedCapture)
     }
 
     fn nargs(&self) -> Nargs {
@@ -151,21 +194,22 @@ where
     }
 }
 
-impl<'ap, C, T> TypeCapturable<'ap, T> for Container<'ap, C, T>
+impl<'ap, C, T> GenericCapturable<'ap, T> for Container<'ap, C, T>
 where
     C: 'ap + Collectable<T> + Nargable,
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    fn matched_generic(&mut self) {
+    fn matched(&mut self) {
         // Do nothing.
     }
 
-    fn capture_generic(&mut self, str_value: &str) {
-        let result: Result<T, ParseError<T>> =
-            T::from_str(str_value).map_err(|e| ParseError::FromStrError(e));
-        let value = result.unwrap();
-        (**self.variable.borrow_mut()).add(value).unwrap();
+    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>> {
+        let result: Result<T, GenericCaptureError<T>> =
+            T::from_str(str_value).map_err(|e| GenericCaptureError::FromStrError(e));
+        let value = result?;
+        (**self.variable.borrow_mut()).add(value);
+        Ok(())
     }
 
     fn nargs(&self) -> Nargs {
@@ -173,42 +217,20 @@ where
     }
 }
 
-#[derive(Error)]
-pub enum ParseError<T>
-where
-    T: FromStr,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
-    #[error("Encountered error while parsing from_str: {0:?}.")]
-    FromStrError(<T as FromStr>::Err),
-}
-
-// There is a bug/limitation with the #[derive(Debug)] for this case.
-// So simply implement it ourselves.
-impl<T> std::fmt::Debug for ParseError<T>
-where
-    T: FromStr,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 pub struct Field<'ap, T: 'ap> {
     pub(crate) nargs: Nargs,
-    type_capturable: Box<dyn TypeCapturable<'ap, T> + 'ap>,
+    generic_capturable: Box<dyn GenericCapturable<'ap, T> + 'ap>,
 }
 
 impl<'ap, T> Field<'ap, T>
 where
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    pub fn binding(type_capturable: impl TypeCapturable<'ap, T> + 'ap) -> Self {
+    pub fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
         Self {
-            nargs: type_capturable.nargs(),
-            type_capturable: Box::new(type_capturable),
+            nargs: generic_capturable.nargs(),
+            generic_capturable: Box::new(generic_capturable),
         }
     }
 
@@ -220,18 +242,19 @@ where
     }*/
 }
 
-impl<'ap, T> Capturable for Field<'ap, T>
+impl<'ap, T> AnonymousCapturable for Field<'ap, T>
 where
-    T: FromStr,
+    T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    fn matched_anonymous(&mut self) {
-        self.type_capturable.matched_generic();
+    fn matched(&mut self) {
+        self.generic_capturable.matched();
     }
 
-    fn capture_anonymous(&mut self, value: &str) -> Result<(), ()> {
-        self.type_capturable.capture_generic(value);
-        Ok(())
+    fn capture(&mut self, value: &str) -> Result<(), AnonymousCaptureError> {
+        self.generic_capturable
+            .capture(value)
+            .map_err(AnonymousCaptureError::from)
     }
 }
 
@@ -245,14 +268,24 @@ mod tests {
         // Integer
         let mut variable: u32 = u32::default();
         let mut value = Value::new(&mut variable);
-        value.capture_generic("5");
+        value.capture("5").unwrap();
         assert_eq!(variable, 5);
 
         // Boolean
         let mut variable: bool = false;
         let mut value = Value::new(&mut variable);
-        value.capture_generic("true");
+        value.capture("true").unwrap();
         assert!(variable);
+    }
+
+    #[test]
+    fn switch_capture() {
+        let mut variable: u32 = u32::default();
+        let mut switch = Switch::new(&mut variable, 1);
+        assert!(matches!(
+            switch.capture("5").unwrap_err(),
+            GenericCaptureError::ProhibitedCapture
+        ));
     }
 
     #[test]
@@ -260,22 +293,22 @@ mod tests {
         // Option<u32>
         let mut variable: Option<u32> = None;
         let mut container = Container::new(&mut variable);
-        container.capture_generic("1");
+        container.capture("1").unwrap();
         assert_eq!(variable, Some(1));
 
         // Vec<u32>
         let mut variable: Vec<u32> = Vec::default();
         let mut container = Container::new(&mut variable);
-        container.capture_generic("1");
-        container.capture_generic("0");
+        container.capture("1").unwrap();
+        container.capture("0").unwrap();
         assert_eq!(variable, vec![1, 0]);
 
         // HashSet<u32>
         let mut variable: HashSet<u32> = HashSet::default();
         let mut container = Container::new(&mut variable);
-        container.capture_generic("1");
-        container.capture_generic("0");
-        container.capture_generic("0");
+        container.capture("1").unwrap();
+        container.capture("0").unwrap();
+        container.capture("0").unwrap();
         assert_eq!(variable, HashSet::from([0, 1]));
     }
 
@@ -283,8 +316,65 @@ mod tests {
     fn value_overwritten() {
         let mut variable: u32 = u32::default();
         let mut value = Value::new(&mut variable);
-        value.capture_generic("5");
+        value.capture("5").unwrap();
         variable = 2;
         assert_eq!(variable, 2);
     }
+
+    #[test]
+    fn value_matched() {
+        let mut variable: u32 = u32::default();
+        let mut value = Value::new(&mut variable);
+        value.matched();
+        assert_eq!(variable, 0);
+    }
+
+    #[test]
+    fn switch_matched() {
+        let mut variable: u32 = u32::default();
+        let mut switch = Switch::new(&mut variable, 2);
+        switch.matched();
+        assert_eq!(variable, 2);
+    }
+
+    #[test]
+    fn container_matched() {
+        let mut variable: Vec<u32> = Vec::default();
+        let mut container = Container::new(&mut variable);
+        container.matched();
+        assert_eq!(variable, vec![]);
+    }
+
+    #[test]
+    fn test_nargs() {
+        let mut variable: u32 = u32::default();
+        let value = Value::new(&mut variable);
+        assert_eq!(value.nargs(), Nargs::Precisely(1));
+
+        let mut variable: u32 = u32::default();
+        let switch = Switch::new(&mut variable, 2);
+        assert_eq!(switch.nargs(), Nargs::Precisely(0));
+
+        let mut variable: Vec<u32> = Vec::default();
+        let container = Container::new(&mut variable);
+        assert_eq!(container.nargs(), Nargs::Any);
+
+        let mut variable: Option<u32> = None;
+        let container = Container::new(&mut variable);
+        assert_eq!(container.nargs(), Nargs::ZeroOrOne);
+    }
+
+    /*#[test]
+    fn test_field() {
+        let mut variable: u32 = u32::default();
+        let mut value = Value::new(&mut variable);
+        value.capture("5").unwrap();
+        assert_eq!(variable, 5);
+
+        let mut variable: u32 = u32::default();
+        let mut field = Field::binding(Value::new(&mut variable));
+        field.matched();
+        field.capture("1").unwrap();
+        assert_eq!(variable, 1);
+    }*/
 }

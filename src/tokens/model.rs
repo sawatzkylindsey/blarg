@@ -1,4 +1,5 @@
 use rand::{distributions::Standard, prelude::Distribution, Rng};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Bound {
@@ -11,7 +12,12 @@ impl Distribution<Bound> for Standard {
         match rng.gen_range(0..2) {
             0 => {
                 let upper: u8 = rng.gen();
-                Bound::Range(rng.gen_range(0..upper), upper)
+
+                if upper == 0 {
+                    Bound::Range(0, upper)
+                } else {
+                    Bound::Range(rng.gen_range(0..upper), upper)
+                }
             }
             1 => Bound::Lower(rng.gen()),
             _ => panic!("impossible gen_range()"),
@@ -75,6 +81,16 @@ pub(crate) struct MatchTokens {
     pub values: Vec<String>,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub(super) enum CloseError {
+    #[error("Too few values provided (expected={expected}, found={found}).")]
+    TooFewValues { expected: u8, found: usize },
+
+    #[error("Too many values provided (expected={expected}, found={found}).")]
+    TooManyValues { expected: u8, found: usize },
+}
+
+#[derive(Debug)]
 pub(super) struct MatchBuffer {
     name: String,
     bound: Bound,
@@ -90,13 +106,8 @@ impl MatchBuffer {
         }
     }
 
-    pub(super) fn push(&mut self, value: String) -> Result<(), ()> {
-        if self.is_open() {
-            self.values.push(value);
-            Ok(())
-        } else {
-            Err(())
-        }
+    pub(super) fn push(&mut self, value: String) {
+        self.values.push(value);
     }
 
     pub(super) fn is_open(&self) -> bool {
@@ -106,18 +117,27 @@ impl MatchBuffer {
         }
     }
 
-    pub(super) fn close(self) -> Result<MatchTokens, ()> {
+    pub(super) fn close(self) -> Result<MatchTokens, CloseError> {
         match self.bound {
             Bound::Lower(n) => {
                 if self.values.len() < n as usize {
-                    return Err(());
+                    return Err(CloseError::TooFewValues {
+                        expected: n,
+                        found: self.values.len(),
+                    });
                 }
             }
             Bound::Range(i, j) => {
                 if self.values.len() < i as usize {
-                    return Err(());
+                    return Err(CloseError::TooFewValues {
+                        expected: i,
+                        found: self.values.len(),
+                    });
                 } else if self.values.len() > j as usize {
-                    return Err(());
+                    return Err(CloseError::TooManyValues {
+                        expected: j,
+                        found: self.values.len(),
+                    });
                 }
             }
         };
@@ -172,13 +192,19 @@ mod tests {
     #[case(Bound::Lower(1), 0, false)]
     #[case(Bound::Lower(1), 1, true)]
     #[case(Bound::Lower(1), 2, true)]
+    #[case(Bound::Lower(10), 2, false)]
     #[case(Bound::Range(0, 2), 0, true)]
     #[case(Bound::Range(0, 2), 1, true)]
     #[case(Bound::Range(1, 2), 0, false)]
     #[case(Bound::Range(1, 2), 1, true)]
     #[case(Bound::Range(1, 2), 2, true)]
+    #[case(Bound::Range(10, 20), 2, false)]
     fn match_buffer_lower(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
         let name = "name".to_string();
+        let lower = match &bound {
+            &Bound::Range(lower, _) => lower,
+            &Bound::Lower(lower) => lower,
+        };
         let remains_open = match &bound {
             &Bound::Range(_, upper) => upper > feed,
             _ => true,
@@ -188,7 +214,7 @@ mod tests {
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
         for token in &tokens {
-            pb.push(token.clone()).unwrap();
+            pb.push(token.clone());
         }
 
         assert_eq!(pb.is_open(), remains_open);
@@ -202,7 +228,13 @@ mod tests {
                 }
             );
         } else {
-            assert_eq!(pb.close(), Err(()));
+            assert_eq!(
+                pb.close().unwrap_err(),
+                CloseError::TooFewValues {
+                    expected: lower,
+                    found: feed as usize
+                }
+            );
         }
     }
 
@@ -212,28 +244,21 @@ mod tests {
     #[case(Bound::Range(0, 1), 0, true)]
     #[case(Bound::Range(0, 1), 1, true)]
     #[case(Bound::Range(0, 1), 2, false)]
+    #[case(Bound::Range(0, 10), 20, false)]
     fn match_buffer_upper(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
         let name = "name".to_string();
-        let starts_open = match &bound {
-            &Bound::Range(_, upper) => upper > 0,
+        let upper = match &bound {
+            &Bound::Range(_, upper) => upper,
             _ => panic!("un-planned test case"),
         };
-        let remains_open = match &bound {
-            &Bound::Range(_, upper) => upper > feed,
-            _ => true,
-        };
+        let starts_open = upper > 0;
+        let remains_open = upper > feed;
         let mut pb = MatchBuffer::new(name.clone(), bound);
         assert_eq!(pb.is_open(), starts_open);
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
-        for (i, token) in tokens.iter().enumerate() {
-            let result = pb.push(token.clone());
-
-            if !expected_ok && i + 1 == feed.into() {
-                assert_eq!(result, Err(()));
-            } else {
-                result.unwrap();
-            }
+        for token in &tokens {
+            pb.push(token.clone());
         }
 
         if expected_ok {
@@ -243,6 +268,14 @@ mod tests {
                 MatchTokens {
                     name,
                     values: tokens,
+                }
+            );
+        } else {
+            assert_eq!(
+                pb.close().unwrap_err(),
+                CloseError::TooManyValues {
+                    expected: upper,
+                    found: feed as usize
                 }
             );
         }

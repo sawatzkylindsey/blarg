@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::str::FromStr;
+use thiserror::Error;
 
 use crate::field::*;
 use crate::tokens::*;
@@ -63,14 +64,14 @@ impl<'ap> ArgumentParser<'ap> {
     pub fn new(program: &'ap str) -> Self {
         Self {
             program,
-            options: Vec::new(),
-            arguments: Vec::new(),
+            options: Vec::default(),
+            arguments: Vec::default(),
         }
     }
 
     pub fn add<T>(mut self, parameter: Parameter, field: Field<'ap, T>) -> Self
     where
-        T: FromStr,
+        T: FromStr + std::fmt::Debug,
         <T as FromStr>::Err: std::fmt::Debug,
     {
         match parameter {
@@ -94,7 +95,8 @@ impl<'ap> ArgumentParser<'ap> {
                     Nargs::Any => Bound::Lower(1),
                 };
                 self.arguments.push((
-                    ArgumentConfig::new(name.to_string(), bound).unwrap(),
+                    ArgumentConfig::new(name.to_string(), bound)
+                        .expect("Argument construction must be valid."),
                     Box::new(field),
                 ));
             }
@@ -102,40 +104,67 @@ impl<'ap> ArgumentParser<'ap> {
         self
     }
 
-    pub fn parse_tokens(self, tokens: &[&str]) {
-        println!("{tokens:?}");
-        ParseCapture::new(self.options, self.arguments)
-            .consume(tokens)
-            .unwrap();
+    fn parse_tokens(self, tokens: &[&str]) -> Result<(), ParseError> {
+        ParseCapture::new(self.options, self.arguments).consume(tokens)
     }
 
     pub fn parse(self) {
         let command_input: Vec<String> = env::args().skip(1).collect();
-        self.parse_tokens(
+        let result = self.parse_tokens(
             command_input
                 .iter()
                 .map(AsRef::as_ref)
                 .collect::<Vec<&str>>()
                 .as_slice(),
         );
+
+        if let Err(parse_error) = result {
+            std::process::exit(1);
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ParseError {
+    #[error("Encountered error matching to parameters.")]
+    MatchError,
+
+    #[error("Encountered error capturing parameters.")]
+    CaptureError,
+}
+
+impl From<MatchError> for ParseError {
+    fn from(error: MatchError) -> Self {
+        ParseError::MatchError
+    }
+}
+
+impl From<AnonymousCaptureError> for ParseError {
+    fn from(error: AnonymousCaptureError) -> Self {
+        ParseError::CaptureError
     }
 }
 
 struct ParseCapture<'ap> {
     token_matcher: TokenMatcher,
-    captures: HashMap<String, Box<(dyn Capturable + 'ap)>>,
+    captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>>,
 }
 
 // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
 // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
-type OptionCapture<'ap> = (OptionConfig, Box<(dyn Capturable + 'ap)>);
-type ArgumentCapture<'ap> = (ArgumentConfig, Box<(dyn Capturable + 'ap)>);
+type OptionCapture<'ap> = (OptionConfig, Box<(dyn AnonymousCapturable + 'ap)>);
+type ArgumentCapture<'ap> = (ArgumentConfig, Box<(dyn AnonymousCapturable + 'ap)>);
+const HELP_NAME: &'static str = "help";
+const HELP_SHORT: char = 'h';
 
 impl<'ap> ParseCapture<'ap> {
     fn new(options: Vec<OptionCapture<'ap>>, arguments: Vec<ArgumentCapture<'ap>>) -> Self {
-        let mut option_configs = HashSet::default();
+        let help_config =
+            OptionConfig::new(HELP_NAME.to_string(), Some(HELP_SHORT), Bound::Range(0, 1));
+        let mut option_configs = HashSet::from([help_config]);
         let mut argument_configs = VecDeque::default();
-        let mut captures: HashMap<String, Box<(dyn Capturable + 'ap)>> = HashMap::default();
+        let mut captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>> =
+            HashMap::default();
 
         for (oc, f) in options.into_iter() {
             assert!(captures.insert(oc.name(), f).is_none());
@@ -153,23 +182,36 @@ impl<'ap> ParseCapture<'ap> {
         }
     }
 
-    fn consume(mut self, tokens: &[&str]) -> Result<(), ()> {
+    fn consume(mut self, tokens: &[&str]) -> Result<(), ParseError> {
         // 1. Feed the raw token strings to the matcher.
         for next in tokens {
-            self.token_matcher.feed(next).unwrap();
+            self.token_matcher.feed(next)?;
         }
 
+        let matches = match self.token_matcher.close() {
+            Ok(matches) | Err((MatchError::ArgumentsUnused, matches))
+                if matches.contains(HELP_NAME) =>
+            {
+                return Ok(());
+            }
+            Ok(matches) => Ok(matches),
+            Err((e, _)) => Err(ParseError::from(e)),
+        }?;
+
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
-        for match_tokens in self.token_matcher.matches().unwrap() {
+        for match_tokens in matches.values {
             // 3. Find the corresponding capture.
-            let mut box_capture = self.captures.remove(&match_tokens.name).unwrap();
+            let mut box_capture = self
+                .captures
+                .remove(&match_tokens.name)
+                .expect("bad impl - mismatch between matches and captures");
             // 4. Let the capture know it has been matched.
             // Some captures may do something based off the fact they were simply matched.
-            box_capture.matched_anonymous();
+            box_capture.matched();
 
             // 5. Convert each of the raw value strings into the capture type.
             for value in &match_tokens.values {
-                box_capture.capture_anonymous(value).unwrap();
+                box_capture.capture(value)?;
             }
         }
 
@@ -181,6 +223,12 @@ impl<'ap> ParseCapture<'ap> {
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    #[test]
+    fn ap_empty() {
+        let ap = ArgumentParser::new("abc");
+        ap.parse_tokens(empty::slice()).unwrap();
+    }
 
     #[rstest]
     #[case(vec!["--variable", "1"])]
@@ -196,7 +244,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Value::new(&mut variable)),
         )
-        .parse_tokens(tokens.as_slice());
+        .parse_tokens(tokens.as_slice())
+        .unwrap();
         assert_eq!(variable, 1);
     }
 
@@ -210,7 +259,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Switch::new(&mut variable, 2)),
         )
-        .parse_tokens(tokens.as_slice());
+        .parse_tokens(tokens.as_slice())
+        .unwrap();
         assert_eq!(variable, 2);
     }
 
@@ -230,7 +280,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Container::new(&mut variable)),
         )
-        .parse_tokens(tokens.as_slice());
+        .parse_tokens(tokens.as_slice())
+        .unwrap();
         assert_eq!(variable, expected);
     }
 
@@ -242,7 +293,8 @@ mod tests {
             Parameter::argument("variable"),
             Field::binding(Value::new(&mut variable)),
         )
-        .parse_tokens(vec!["1"].as_slice());
+        .parse_tokens(vec!["1"].as_slice())
+        .unwrap();
         assert_eq!(variable, 1);
     }
 
@@ -257,15 +309,27 @@ mod tests {
             Parameter::argument("variable"),
             Field::binding(Container::new(&mut variable)),
         )
-        .parse_tokens(&tokens[..]);
+        .parse_tokens(&tokens[..])
+        .unwrap();
         assert_eq!(variable, expected);
     }
 
-    #[test]
-    fn parse_capture_empty() {
-        let options = vec![];
-        let arguments = vec![];
-        let pc = ParseCapture::new(options, arguments);
-        pc.consume(empty::slice()).unwrap();
+    #[rstest]
+    #[case(vec!["--help"])]
+    #[case(vec!["-h"])]
+    #[case(vec!["--help", "1"])]
+    #[case(vec!["-h", "1"])]
+    #[case(vec!["--help", "not-a-u32"])]
+    #[case(vec!["-h", "not-a-u32"])]
+    fn ap_help(#[case] tokens: Vec<&str>) {
+        let ap = ArgumentParser::new("abc");
+        let mut variable: u32 = 0;
+        ap.add(
+            Parameter::argument("variable"),
+            Field::binding(Value::new(&mut variable)),
+        )
+        .parse_tokens(tokens.as_slice())
+        .unwrap();
+        assert_eq!(variable, 0);
     }
 }

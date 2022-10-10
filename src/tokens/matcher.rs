@@ -1,6 +1,31 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use thiserror::Error;
 
 use crate::tokens::*;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum MatchError {
+    #[error("Not enough tokens provided to argument/option.")]
+    Incomplete,
+
+    #[error("No more arguments to match against.")]
+    ArgumentsExhausted,
+
+    #[error("Argument(s) remain to match against.")]
+    ArgumentsUnused,
+
+    #[error("Option does not exist.")]
+    InvalidOption,
+}
+
+impl From<CloseError> for MatchError {
+    fn from(error: CloseError) -> Self {
+        match error {
+            CloseError::TooFewValues { .. } => MatchError::Incomplete,
+            CloseError::TooManyValues { .. } => panic!("{:?}", error),
+        }
+    }
+}
 
 pub(crate) struct TokenMatcher {
     option_bounds: HashMap<String, Bound>,
@@ -35,7 +60,7 @@ impl TokenMatcher {
         }
     }
 
-    pub(crate) fn feed(&mut self, token: &str) -> Result<(), ()> {
+    pub(crate) fn feed(&mut self, token: &str) -> Result<(), MatchError> {
         // Find a 'long' flag, such as:
         //  --initial
         //  --initial ..
@@ -57,17 +82,17 @@ impl TokenMatcher {
         }
 
         // Match against an argument.
-        return self.match_argument(token);
+        self.match_argument(token)
     }
 
-    fn match_argument(&mut self, token: &str) -> Result<(), ()> {
+    fn match_argument(&mut self, token: &str) -> Result<(), MatchError> {
         let mut match_buffer = match self.buffer.take() {
             Some(match_buffer) => {
                 if match_buffer.is_open() {
                     match_buffer
                 } else {
                     // Flip to the next argument
-                    let match_tokens = match_buffer.close()?;
+                    let match_tokens = match_buffer.close().expect("didn't work");
                     self.matches.insert(match_tokens);
                     self.next_argument()?
                 }
@@ -78,7 +103,7 @@ impl TokenMatcher {
             }
         };
 
-        match_buffer.push(token.to_string()).unwrap();
+        match_buffer.push(token.to_string());
 
         if let Some(_) = self.buffer.replace(match_buffer) {
             panic!("internal error - the buffer is expected to be None");
@@ -87,23 +112,24 @@ impl TokenMatcher {
         Ok(())
     }
 
-    fn next_argument(&mut self) -> Result<MatchBuffer, ()> {
+    fn next_argument(&mut self) -> Result<MatchBuffer, MatchError> {
         match self.arguments.pop_front() {
             Some(argument_config) => Ok(MatchBuffer::new(
                 argument_config.name(),
                 argument_config.bound(),
             )),
-            None => Err(()),
+            None => Err(MatchError::ArgumentsExhausted),
         }
     }
 
-    fn match_option(&mut self, (left, right): (&str, Option<&str>)) -> Result<(), ()> {
+    fn match_option(&mut self, (left, right): (&str, Option<&str>)) -> Result<(), MatchError> {
         if let Some(bound) = self.option_bounds.remove(left) {
             let mut match_buffer = MatchBuffer::new(left.to_string(), bound);
 
             let next_buffer = match right {
                 Some(v) => {
-                    match_buffer.push(v.to_string())?;
+                    match_buffer.push(v.to_string());
+
                     // Options using k=v syntax cannot follow up with more values afterwards.
                     let match_tokens = match_buffer.close()?;
                     self.matches.insert(match_tokens);
@@ -113,11 +139,14 @@ impl TokenMatcher {
             };
             self.update_buffer(next_buffer)
         } else {
-            Err(())
+            Err(MatchError::InvalidOption)
         }
     }
 
-    fn match_option_short(&mut self, (left, right): (&str, Option<&str>)) -> Result<(), ()> {
+    fn match_option_short(
+        &mut self,
+        (left, right): (&str, Option<&str>),
+    ) -> Result<(), MatchError> {
         for (index, single) in left.chars().enumerate() {
             if let Some(name) = self.short_options.get(&single) {
                 if let Some(bound) = self.option_bounds.remove(name) {
@@ -129,7 +158,8 @@ impl TokenMatcher {
                         match right {
                             // If an equals delimited value was specified, use it.
                             Some(value) => {
-                                match_buffer.push(value.to_string())?;
+                                match_buffer.push(value.to_string());
+
                                 // Options using k=v syntax cannot follow up with more values afterwards.
                                 let match_tokens = match_buffer.close()?;
                                 self.matches.insert(match_tokens);
@@ -145,19 +175,21 @@ impl TokenMatcher {
                         self.matches.insert(match_tokens);
                     }
                 } else {
-                    return Err(());
+                    return Err(MatchError::InvalidOption);
                 }
 
-                self.short_options.remove(&single).unwrap();
+                self.short_options
+                    .remove(&single)
+                    .expect("Must be able to remove the selected short option.");
             } else {
-                return Err(());
+                return Err(MatchError::InvalidOption);
             }
         }
 
         Ok(())
     }
 
-    fn update_buffer(&mut self, next_buffer: Option<MatchBuffer>) -> Result<(), ()> {
+    fn update_buffer(&mut self, next_buffer: Option<MatchBuffer>) -> Result<(), MatchError> {
         let previous_buffer = std::mem::replace(&mut self.buffer, next_buffer);
 
         if let Some(match_buffer) = previous_buffer {
@@ -168,17 +200,41 @@ impl TokenMatcher {
         Ok(())
     }
 
-    pub(crate) fn matches(mut self) -> Result<HashSet<MatchTokens>, ()> {
+    pub(crate) fn close(mut self) -> Result<Matches, (MatchError, Matches)> {
+        let mut close_error: Option<CloseError> = None;
         if let Some(match_buffer) = self.buffer {
-            let match_tokens = match_buffer.close()?;
-            self.matches.insert(match_tokens);
+            match match_buffer.close() {
+                Ok(match_tokens) => {
+                    self.matches.insert(match_tokens);
+                }
+                Err(error) => {
+                    close_error.replace(error);
+                }
+            };
         }
 
-        if !self.arguments.is_empty() {
-            Err(())
+        let matches = Matches {
+            values: self.matches,
+        };
+
+        if let Some(error) = close_error {
+            Err((MatchError::from(error), matches))
+        } else if !self.arguments.is_empty() {
+            Err((MatchError::ArgumentsUnused, matches))
         } else {
-            Ok(self.matches)
+            Ok(matches)
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Matches {
+    pub values: HashSet<MatchTokens>,
+}
+
+impl Matches {
+    pub(crate) fn contains(&self, name: &str) -> bool {
+        self.values.iter().any(|mt| &mt.name == name)
     }
 }
 
@@ -212,7 +268,7 @@ mod tests {
             let result = tp.feed(token);
 
             if !expected_ok && i + 1 == feed.into() {
-                assert_eq!(result, Err(()));
+                assert_eq!(result.unwrap_err(), MatchError::ArgumentsExhausted);
             } else {
                 result.unwrap();
             }
@@ -221,7 +277,7 @@ mod tests {
         // Verify
         if expected_ok {
             assert_eq!(
-                tp.matches().unwrap(),
+                tp.close().unwrap().values,
                 HashSet::from([MatchTokens {
                     name: "initial".to_string(),
                     values: tokens,
@@ -256,14 +312,16 @@ mod tests {
         // Verify
         if expected_ok {
             assert_eq!(
-                tp.matches().unwrap(),
+                tp.close().unwrap().values,
                 HashSet::from([MatchTokens {
                     name: "initial".to_string(),
                     values: tokens,
                 }])
             );
         } else {
-            assert_eq!(tp.matches(), Err(()));
+            let (error, matches) = tp.close().unwrap_err();
+            assert_eq!(error, MatchError::Incomplete);
+            assert_eq!(matches.values, HashSet::default());
         }
     }
 
@@ -291,7 +349,7 @@ mod tests {
 
         // Verify
         assert_eq!(
-            tp.matches().unwrap(),
+            tp.close().unwrap().values,
             HashSet::from([MatchTokens {
                 name: "initial".to_string(),
                 values: tokens,
@@ -308,7 +366,7 @@ mod tests {
         )]);
         let mut tp = TokenMatcher::new(options, VecDeque::default());
 
-        assert_eq!(tp.feed("--moot"), Err(()));
+        assert_eq!(tp.feed("--moot").unwrap_err(), MatchError::InvalidOption);
     }
 
     #[test]
@@ -321,7 +379,7 @@ mod tests {
         let mut tp = TokenMatcher::new(options, VecDeque::default());
 
         tp.feed("--verbose").unwrap();
-        assert_eq!(tp.feed("--verbose"), Err(()));
+        assert_eq!(tp.feed("--verbose").unwrap_err(), MatchError::InvalidOption);
     }
 
     #[rstest]
@@ -348,11 +406,12 @@ mod tests {
         for token in tokens.iter() {
             tp.feed(token).unwrap();
         }
-        let matches = tp.matches().unwrap();
+        let matches = tp.close().unwrap();
 
         // Verify
         if expected_verbose {
-            assert!(matches.contains(&MatchTokens {
+            assert!(matches.contains("verbose"));
+            assert!(matches.values.contains(&MatchTokens {
                 name: "verbose".to_string(),
                 values: Vec::default(),
             }));
@@ -360,11 +419,12 @@ mod tests {
 
         match expected_flags {
             None => {
-                assert_eq!(matches.len(), if expected_verbose { 1 } else { 0 });
+                assert_eq!(matches.values.len(), if expected_verbose { 1 } else { 0 });
             }
             Some(expected) => {
-                assert_eq!(matches.len(), if expected_verbose { 2 } else { 1 });
-                assert!(matches.contains(&MatchTokens {
+                assert_eq!(matches.values.len(), if expected_verbose { 2 } else { 1 });
+                assert!(matches.contains("flag"));
+                assert!(matches.values.contains(&MatchTokens {
                     name: "flag".to_string(),
                     values: expected.iter().map(|e| e.to_string()).collect(),
                 }));
@@ -406,7 +466,7 @@ mod tests {
             Some(value) => {
                 result.unwrap();
                 assert_eq!(
-                    tp.matches().unwrap(),
+                    tp.close().unwrap().values,
                     HashSet::from([MatchTokens {
                         name: "initial".to_string(),
                         values: vec![value.to_string()],
@@ -414,7 +474,7 @@ mod tests {
                 );
             }
             None => {
-                assert_eq!(result, Err(()));
+                assert_eq!(result.unwrap_err(), MatchError::ArgumentsExhausted);
             }
         }
     }
@@ -446,7 +506,7 @@ mod tests {
 
         // Verify
         assert_eq!(
-            tp.matches().unwrap(),
+            tp.close().unwrap().values,
             HashSet::from([MatchTokens {
                 name: "super-verbose".to_string(),
                 values: expected.iter().map(|e| e.to_string()).collect(),
@@ -463,7 +523,7 @@ mod tests {
         let mut tp = TokenMatcher::new(options, VecDeque::default());
 
         // Execute & verify
-        assert_eq!(tp.feed("-vf"), Err(()));
+        assert_eq!(tp.feed("-vf").unwrap_err(), MatchError::Incomplete);
     }
 
     #[test]
@@ -485,7 +545,7 @@ mod tests {
         )]);
         let mut tp = TokenMatcher::new(options, VecDeque::default());
 
-        assert_eq!(tp.feed("-f"), Err(()));
+        assert_eq!(tp.feed("-f").unwrap_err(), MatchError::InvalidOption);
     }
 
     #[test]
@@ -498,7 +558,7 @@ mod tests {
         let mut tp = TokenMatcher::new(options, VecDeque::default());
 
         tp.feed("-v").unwrap();
-        assert_eq!(tp.feed("-v"), Err(()));
+        assert_eq!(tp.feed("-v").unwrap_err(), MatchError::InvalidOption);
     }
 
     #[rstest]
@@ -520,7 +580,7 @@ mod tests {
             let result = tp.feed(token);
 
             if !expected_ok && i + 1 == feed.into() {
-                assert_eq!(result, Err(()));
+                assert_eq!(result.unwrap_err(), MatchError::ArgumentsExhausted);
             } else {
                 result.unwrap();
             }
@@ -529,7 +589,7 @@ mod tests {
         // Verify
         if expected_ok {
             assert_eq!(
-                tp.matches().unwrap(),
+                tp.close().unwrap().values,
                 HashSet::from([MatchTokens {
                     name: "item".to_string(),
                     values: tokens,
@@ -557,14 +617,16 @@ mod tests {
         // Verify
         if expected_ok {
             assert_eq!(
-                tp.matches().unwrap(),
+                tp.close().unwrap().values,
                 HashSet::from([MatchTokens {
                     name: "item".to_string(),
                     values: tokens,
                 }])
             );
         } else {
-            assert_eq!(tp.matches(), Err(()));
+            let (error, matches) = tp.close().unwrap_err();
+            assert_eq!(error, MatchError::ArgumentsUnused);
+            assert_eq!(matches.values, HashSet::default());
         }
     }
 
@@ -589,14 +651,16 @@ mod tests {
         // Verify
         if expected_ok {
             assert_eq!(
-                tp.matches().unwrap(),
+                tp.close().unwrap().values,
                 HashSet::from([MatchTokens {
                     name: "item".to_string(),
                     values: tokens,
                 }])
             );
         } else {
-            assert_eq!(tp.matches(), Err(()));
+            let (error, matches) = tp.close().unwrap_err();
+            assert_eq!(error, MatchError::ArgumentsUnused);
+            assert_eq!(matches.values, HashSet::default());
         }
     }
 
@@ -616,7 +680,7 @@ mod tests {
 
         // Verify
         assert_eq!(
-            tp.matches().unwrap(),
+            tp.close().unwrap().values,
             HashSet::from([
                 MatchTokens {
                     name: "arg1".to_string(),
@@ -641,7 +705,15 @@ mod tests {
         tp.feed("value1").unwrap();
         tp.feed("value2").unwrap();
 
-        assert_eq!(tp.matches(), Err(()));
+        let (error, matches) = tp.close().unwrap_err();
+        assert_eq!(error, MatchError::ArgumentsUnused);
+        assert_eq!(
+            matches.values,
+            HashSet::from([MatchTokens {
+                name: "arg1".to_string(),
+                values: vec!["value1".to_string(), "value2".to_string()],
+            }])
+        );
     }
 
     #[rstest]
@@ -682,7 +754,7 @@ mod tests {
             });
         }
 
-        assert_eq!(tp.matches().unwrap(), expected);
+        assert_eq!(tp.close().unwrap().values, expected);
     }
 
     #[rstest]
@@ -723,7 +795,7 @@ mod tests {
             });
         }
 
-        assert_eq!(tp.matches().unwrap(), expected);
+        assert_eq!(tp.close().unwrap().values, expected);
     }
 
     #[test]
@@ -744,7 +816,7 @@ mod tests {
         }
 
         assert_eq!(
-            tp.matches().unwrap(),
+            tp.close().unwrap().values,
             HashSet::from([
                 MatchTokens {
                     name: "verbose".to_string(),
