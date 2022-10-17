@@ -1,3 +1,4 @@
+use crate::field::Nargs;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 use thiserror::Error;
 
@@ -5,6 +6,16 @@ use thiserror::Error;
 pub(crate) enum Bound {
     Range(u8, u8),
     Lower(u8),
+}
+
+impl From<Nargs> for Bound {
+    fn from(value: Nargs) -> Self {
+        match value {
+            Nargs::Precisely(n) => Bound::Range(n, n),
+            Nargs::Any => Bound::Lower(0),
+            Nargs::AtLeastOne => Bound::Lower(1),
+        }
+    }
 }
 
 impl Distribution<Bound> for Standard {
@@ -20,7 +31,7 @@ impl Distribution<Bound> for Standard {
                 }
             }
             1 => Bound::Lower(rng.gen()),
-            _ => panic!("impossible gen_range()"),
+            _ => panic!("internal error - impossible gen_range()"),
         }
     }
 }
@@ -32,13 +43,8 @@ pub(crate) struct ArgumentConfig {
 }
 
 impl ArgumentConfig {
-    pub(crate) fn new(name: String, bound: Bound) -> Result<Self, ()> {
-        match &bound {
-            &Bound::Lower(n) | &Bound::Range(n, _) if n == 0 => {
-                return Err(());
-            }
-            _ => Ok(Self { name, bound }),
-        }
+    pub(crate) fn new(name: String, bound: Bound) -> Self {
+        Self { name, bound }
     }
 
     pub(crate) fn name(&self) -> String {
@@ -78,23 +84,33 @@ impl OptionConfig {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) struct MatchTokens {
     pub name: String,
-    pub values: Vec<String>,
+    pub values: Vec<OffsetValue>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(super) enum CloseError {
-    #[error("Too few values provided (expected={expected}, found={found}).")]
-    TooFewValues { expected: u8, found: usize },
+    #[error("Too few values provided for '{name}' (provided={provided}, expected={expected}).")]
+    TooFewValues {
+        name: String,
+        provided: usize,
+        expected: u8,
+    },
 
-    #[error("Too many values provided (expected={expected}, found={found}).")]
-    TooManyValues { expected: u8, found: usize },
+    #[error("Too many values provided for '{name}' (provided={provided}, expected={expected}).")]
+    TooManyValues {
+        name: String,
+        provided: usize,
+        expected: u8,
+    },
 }
+
+type OffsetValue = (usize, String);
 
 #[derive(Debug)]
 pub(super) struct MatchBuffer {
     name: String,
     bound: Bound,
-    values: Vec<String>,
+    values: Vec<OffsetValue>,
 }
 
 impl MatchBuffer {
@@ -106,8 +122,8 @@ impl MatchBuffer {
         }
     }
 
-    pub(super) fn push(&mut self, value: String) {
-        self.values.push(value);
+    pub(super) fn push(&mut self, offset: usize, value: String) {
+        self.values.push((offset, value));
     }
 
     pub(super) fn is_open(&self) -> bool {
@@ -122,21 +138,24 @@ impl MatchBuffer {
             Bound::Lower(n) => {
                 if self.values.len() < n as usize {
                     return Err(CloseError::TooFewValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: n,
-                        found: self.values.len(),
                     });
                 }
             }
             Bound::Range(i, j) => {
                 if self.values.len() < i as usize {
                     return Err(CloseError::TooFewValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: i,
-                        found: self.values.len(),
                     });
                 } else if self.values.len() > j as usize {
                     return Err(CloseError::TooManyValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: j,
-                        found: self.values.len(),
                     });
                 }
             }
@@ -156,22 +175,23 @@ mod tests {
     use rstest::rstest;
 
     #[test]
-    fn argument_config() {
-        let name = "name".to_string();
-        let bound: Bound = thread_rng().gen();
-        let config = ArgumentConfig::new(name.clone(), bound).unwrap();
-        assert_eq!(config.name(), name);
-        assert_eq!(config.bound(), bound);
+    fn from_nargs() {
+        assert_eq!(Bound::from(Nargs::Precisely(0)), Bound::Range(0, 0));
+        assert_eq!(Bound::from(Nargs::Precisely(1)), Bound::Range(1, 1));
+        assert_eq!(Bound::from(Nargs::Any), Bound::Lower(0));
+        assert_eq!(Bound::from(Nargs::AtLeastOne), Bound::Lower(1));
     }
 
-    #[rstest]
-    #[case(Bound::Range(0, 0))]
-    #[case(Bound::Range(0, 1))]
-    #[case(Bound::Range(0, 2))]
-    #[case(Bound::Lower(0))]
-    fn argument_config_invalid(#[case] bound: Bound) {
-        let error = ArgumentConfig::new("name".to_string(), bound).unwrap_err();
-        assert_eq!(error, ());
+    #[test]
+    fn argument_config() {
+        let name = "name".to_string();
+
+        for _ in 0..100 {
+            let bound: Bound = thread_rng().gen();
+            let config = ArgumentConfig::new(name.clone(), bound);
+            assert_eq!(config.name(), name);
+            assert_eq!(config.bound(), bound);
+        }
     }
 
     #[rstest]
@@ -179,11 +199,14 @@ mod tests {
     #[case(Some('n'))]
     fn option_config(#[case] short: Option<char>) {
         let name = "name".to_string();
-        let bound: Bound = thread_rng().gen();
-        let config = OptionConfig::new(name.clone(), short.clone(), bound);
-        assert_eq!(config.name(), name);
-        assert_eq!(config.short(), &short);
-        assert_eq!(config.bound(), bound);
+
+        for _ in 0..100 {
+            let bound: Bound = thread_rng().gen();
+            let config = OptionConfig::new(name.clone(), short.clone(), bound);
+            assert_eq!(config.name(), name);
+            assert_eq!(config.short(), &short);
+            assert_eq!(config.bound(), bound);
+        }
     }
 
     #[rstest]
@@ -211,10 +234,12 @@ mod tests {
         };
         let mut pb = MatchBuffer::new(name.clone(), bound);
         assert!(pb.is_open());
-        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+        let tokens: Vec<(usize, String)> = (0..feed)
+            .map(|i| (thread_rng().gen(), i.to_string()))
+            .collect();
 
-        for token in &tokens {
-            pb.push(token.clone());
+        for (offset, token) in &tokens {
+            pb.push(*offset, token.clone());
         }
 
         assert_eq!(pb.is_open(), remains_open);
@@ -231,8 +256,9 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooFewValues {
+                    name,
+                    provided: feed as usize,
                     expected: lower,
-                    found: feed as usize
                 }
             );
         }
@@ -255,10 +281,12 @@ mod tests {
         let remains_open = upper > feed;
         let mut pb = MatchBuffer::new(name.clone(), bound);
         assert_eq!(pb.is_open(), starts_open);
-        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+        let tokens: Vec<(usize, String)> = (0..feed)
+            .map(|i| (thread_rng().gen(), i.to_string()))
+            .collect();
 
-        for token in &tokens {
-            pb.push(token.clone());
+        for (offset, token) in &tokens {
+            pb.push(*offset, token.clone());
         }
 
         if expected_ok {
@@ -274,8 +302,9 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooManyValues {
+                    name,
+                    provided: feed as usize,
                     expected: upper,
-                    found: feed as usize
                 }
             );
         }

@@ -45,6 +45,45 @@ It should be straightforward to program arguments, options and sub-comands with 
 On the other hand, semantics outside of the CLI paradigm should be difficult/impossible within the `blarg` Api.
 For example, the `blarg` Api does not allow for a required parameter to be specified via option syntax.
 
+### Api Grammar
+
+**Argument**
+```
+Field               | Narg     | Grammar        | Description
+--------------------------------------------------------------------------------
+Value<T>            | \        | VALUE          | precisely 1
+Container<Option<T> | \        | \              | invalid; use Parameter::option
+Container<C<T>>     | n; n > 0 | VALUE .. VALUE | precisely n
+Container<C<T>>     | *        | [VALUE ...]    | any amount; captured greedily
+Container<C<T>>     | +        | VALUE [...]    | at least 1; captured greedily
+Switch<T>           | \        | \              | invalid; use Parameter::option
+```
+
+**Option**
+```
+Field               | Narg     | Grammar                 | Description
+----------------------------------------------------------------------------------------
+Value<T>            | \        | [--NAME VALUE]          | precisely 1
+Container<Option<T> | \        | [--NAME VALUE]          | precisely 1
+Container<C<T>>     | n; n > 0 | [--NAME VALUE .. VALUE] | precisely n
+Container<C<T>>     | +        | [--NAME VALUE [...]]    | at least 1; captured greedily
+Switch<T>           | \        | [--NAME]                | precisely 0
+```
+There are two addition rules the grammar of **options**.
+
+1. The key-value pair may be separated with the `=` character.
+In this case, only 1 value is passed to the option; subsequent tokens always apply to the next parameter.
+In other words, this overrides a greedy capture.
+For example, `--key=123` is equivalent to `--key 123`.
+Only the first `=` character is used as a separator.
+For example, `--key=123=456` is equivalent to `--key 123=456`.
+2. If there is a short name, then the same grammar may be used with a single-dash single-char flag.
+Multiple short named options may be combined into a single flag.
+For example, `-abc` is equivalent to `--apple --banana --carrot`.
+The previous rule applies to short names as well.
+For example, `-abc=123` is equivalent to `--apple --banana --carrot=123`.
+
+
 ### Development
 
     cargo build

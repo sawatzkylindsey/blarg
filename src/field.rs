@@ -8,17 +8,14 @@ use crate::collection::*;
 
 /// Describes the number of command inputs associated with the argument/option.
 /// Inspired by argparse: <https://docs.python.org/3/library/argparse.html#nargs>
-///
-/// Notice, this isn't used directly on the user interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[doc(hidden)]
 pub enum Nargs {
     /// N: Limited by precisely `N` values.
     Precisely(u8),
-    /// ?: Must be either `1` value, or no values.
-    ZeroOrOne,
     /// *: May be any number of values, including `0`.
     Any,
+    /// +: At least one value must be specified.
+    AtLeastOne,
 }
 
 pub(crate) trait Nargable {
@@ -38,58 +35,29 @@ where
     fn matched(&mut self);
 
     /// Capture a value into the generic type T for this parameter.
-    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>>;
+    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion>;
 
     /// Get the `Nargs` for this implementation.
     fn nargs(&self) -> Nargs;
 }
 
 #[derive(Debug, Error)]
-pub enum GenericCaptureError<T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
-    #[error("Parse error during capture: {0:?}.")]
-    FromStrError(<T as FromStr>::Err),
-
-    #[error("The capture is prohibited.")]
-    ProhibitedCapture,
+#[doc(hidden)]
+#[error("'{token}' cannot convert to {type_name}.")]
+pub struct InvalidConversion {
+    token: String,
+    type_name: &'static str,
 }
 
 /// Behaviour to capture an implicit generic type T from an input `&str`.
 ///
 /// We use this at the middle/top of the argument parser object graph so that different types may all be 'captured' in a single argument parser.
-pub trait AnonymousCapturable {
+pub(crate) trait AnonymousCapturable {
     /// Declare that the parameter has been matched.
     fn matched(&mut self);
 
     /// Capture a value anonymously for this parameter.
-    fn capture(&mut self, value: &str) -> Result<(), AnonymousCaptureError>;
-}
-
-#[derive(Debug, Error, PartialEq, Eq)]
-pub enum AnonymousCaptureError {
-    #[error("{0}")]
-    FromStrError(String),
-
-    #[error("The capture is prohibited.")]
-    ProhibitedCapture,
-}
-
-impl<T> From<GenericCaptureError<T>> for AnonymousCaptureError
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
-    fn from(error: GenericCaptureError<T>) -> Self {
-        match error {
-            GenericCaptureError::FromStrError(_) => {
-                AnonymousCaptureError::FromStrError(format!("{error:?}"))
-            }
-            GenericCaptureError::ProhibitedCapture => AnonymousCaptureError::ProhibitedCapture,
-        }
-    }
+    fn capture(&mut self, value: &str) -> Result<(), InvalidConversion>;
 }
 
 /// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
@@ -114,9 +82,12 @@ where
         // Do nothing.
     }
 
-    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>> {
-        let result: Result<T, GenericCaptureError<T>> =
-            T::from_str(str_value).map_err(|e| GenericCaptureError::FromStrError(e));
+    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
+        let result: Result<T, InvalidConversion> =
+            T::from_str(token).map_err(|_| InvalidConversion {
+                token: token.to_string(),
+                type_name: std::any::type_name::<T>(),
+            });
         let value = result?;
         **self.variable.borrow_mut() = value;
         Ok(())
@@ -160,11 +131,11 @@ where
         **self.variable.borrow_mut() = self
             .target
             .take()
-            .expect("Must be able to take the Switch#target.");
+            .expect("internal error - must be able to take the Switch#target");
     }
 
-    fn capture(&mut self, _str_value: &str) -> Result<(), GenericCaptureError<T>> {
-        Err(GenericCaptureError::ProhibitedCapture)
+    fn capture(&mut self, _token: &str) -> Result<(), InvalidConversion> {
+        panic!("internal error - must not capture on a Switch");
     }
 
     fn nargs(&self) -> Nargs {
@@ -204,9 +175,12 @@ where
         // Do nothing.
     }
 
-    fn capture(&mut self, str_value: &str) -> Result<(), GenericCaptureError<T>> {
-        let result: Result<T, GenericCaptureError<T>> =
-            T::from_str(str_value).map_err(|e| GenericCaptureError::FromStrError(e));
+    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
+        let result: Result<T, InvalidConversion> =
+            T::from_str(token).map_err(|_| InvalidConversion {
+                token: token.to_string(),
+                type_name: std::any::type_name::<T>(),
+            });
         let value = result?;
         (**self.variable.borrow_mut()).add(value);
         Ok(())
@@ -233,13 +207,6 @@ where
             generic_capturable: Box::new(generic_capturable),
         }
     }
-
-    /*pub fn help(self, message: &'static str) -> Self {
-        Self {
-            help: Some(message),
-            ..self
-        }
-    }*/
 }
 
 impl<'ap, T> AnonymousCapturable for Field<'ap, T>
@@ -251,10 +218,8 @@ where
         self.generic_capturable.matched();
     }
 
-    fn capture(&mut self, value: &str) -> Result<(), AnonymousCaptureError> {
-        self.generic_capturable
-            .capture(value)
-            .map_err(AnonymousCaptureError::from)
+    fn capture(&mut self, value: &str) -> Result<(), InvalidConversion> {
+        self.generic_capturable.capture(value)
     }
 }
 
@@ -279,13 +244,14 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn switch_capture() {
         let mut variable: u32 = u32::default();
         let mut switch = Switch::new(&mut variable, 1);
-        assert!(matches!(
-            switch.capture("5").unwrap_err(),
-            GenericCaptureError::ProhibitedCapture
-        ));
+        match switch.capture("5") {
+            Ok(_) => {}
+            Err(_) => {}
+        };
     }
 
     #[test]
@@ -357,11 +323,11 @@ mod tests {
 
         let mut variable: Vec<u32> = Vec::default();
         let container = Container::new(&mut variable);
-        assert_eq!(container.nargs(), Nargs::Any);
+        assert_eq!(container.nargs(), Nargs::AtLeastOne);
 
         let mut variable: Option<u32> = None;
         let container = Container::new(&mut variable);
-        assert_eq!(container.nargs(), Nargs::ZeroOrOne);
+        assert_eq!(container.nargs(), Nargs::Precisely(1));
     }
 
     /*#[test]

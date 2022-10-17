@@ -16,7 +16,7 @@ impl<T> Collectable<T> for Vec<T> {
 
 impl<T> Nargable for Vec<T> {
     fn nargs() -> Nargs {
-        Nargs::Any
+        Nargs::AtLeastOne
     }
 }
 
@@ -28,7 +28,7 @@ impl<T: std::cmp::Eq + std::hash::Hash> Collectable<T> for HashSet<T> {
 
 impl<T> Nargable for HashSet<T> {
     fn nargs() -> Nargs {
-        Nargs::Any
+        Nargs::AtLeastOne
     }
 }
 
@@ -40,7 +40,7 @@ impl<T> Collectable<T> for Option<T> {
 
 impl<T> Nargable for Option<T> {
     fn nargs() -> Nargs {
-        Nargs::ZeroOrOne
+        Nargs::Precisely(1)
     }
 }
 
@@ -55,7 +55,7 @@ mod tests {
         collection.add(0);
         assert_eq!(collection, vec![1, 0]);
 
-        assert!(matches!(Vec::<u32>::nargs(), Nargs::Any));
+        assert!(matches!(Vec::<u32>::nargs(), Nargs::AtLeastOne));
     }
 
     #[test]
@@ -66,7 +66,7 @@ mod tests {
         collection.add(1);
         assert_eq!(collection, HashSet::from([1, 0]));
 
-        assert!(matches!(HashSet::<u32>::nargs(), Nargs::Any));
+        assert!(matches!(HashSet::<u32>::nargs(), Nargs::AtLeastOne));
     }
 
     #[test]
@@ -79,6 +79,6 @@ mod tests {
         collection.add(1);
         assert_eq!(collection, Some(1));
 
-        assert!(matches!(Option::<u32>::nargs(), Nargs::ZeroOrOne));
+        assert!(matches!(Option::<u32>::nargs(), Nargs::Precisely(1)));
     }
 }

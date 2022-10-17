@@ -5,7 +5,40 @@ use thiserror::Error;
 
 use crate::field::*;
 use crate::tokens::*;
+use crate::ui::*;
 
+#[derive(Debug, Error)]
+#[error("Config error: {0}")]
+pub struct ConfigError(String);
+
+impl From<TokenMatcherError> for ConfigError {
+    fn from(error: TokenMatcherError) -> Self {
+        match error {
+            TokenMatcherError::DuplicateOption(_) => {
+                panic!("internal error - invalid option should have been caught")
+            }
+            TokenMatcherError::DuplicateShortOption(_) => ConfigError(error.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Parse error: {0}")]
+pub(crate) struct ParseError(String);
+
+impl From<MatchError> for ParseError {
+    fn from(error: MatchError) -> Self {
+        ParseError(error.to_string())
+    }
+}
+
+impl From<InvalidConversion> for ParseError {
+    fn from(error: InvalidConversion) -> Self {
+        ParseError(error.to_string())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Parameter {
     Opt {
         name: &'static str,
@@ -46,10 +79,15 @@ impl Parameter {
     }
 }
 
+type OptionParameter = (&'static str, Option<char>, Nargs, Option<&'static str>);
+type ArgumentParameter = (&'static str, Nargs, Option<&'static str>);
+
 pub struct ArgumentParser<'ap> {
     program: &'ap str,
-    options: Vec<OptionCapture<'ap>>,
-    arguments: Vec<ArgumentCapture<'ap>>,
+    option_parameters: Vec<OptionParameter>,
+    argument_parameters: Vec<ArgumentParameter>,
+    option_captures: Vec<OptionCapture<'ap>>,
+    argument_captures: Vec<ArgumentCapture<'ap>>,
 }
 
 impl<'ap> std::fmt::Debug for ArgumentParser<'ap> {
@@ -64,8 +102,10 @@ impl<'ap> ArgumentParser<'ap> {
     pub fn new(program: &'ap str) -> Self {
         Self {
             program,
-            options: Vec::default(),
-            arguments: Vec::default(),
+            option_parameters: Vec::default(),
+            argument_parameters: Vec::default(),
+            option_captures: Vec::default(),
+            argument_captures: Vec::default(),
         }
     }
 
@@ -74,38 +114,112 @@ impl<'ap> ArgumentParser<'ap> {
         T: FromStr + std::fmt::Debug,
         <T as FromStr>::Err: std::fmt::Debug,
     {
+        let bound = Bound::from(field.nargs);
+        let nargs = field.nargs.clone();
+
         match parameter {
-            Parameter::Opt { name, short, .. } => {
-                // Derive the bound from nargs, in the context of an option parameter.
-                let bound = match field.nargs {
-                    Nargs::Precisely(n) => Bound::Range(n, n),
-                    Nargs::ZeroOrOne => Bound::Range(0, 1),
-                    Nargs::Any => Bound::Lower(0),
-                };
-                self.options.push((
-                    OptionConfig::new(name.to_string(), short, bound),
+            Parameter::Opt { name, short, help } => {
+                self.option_captures.push((
+                    OptionConfig::new(name.to_string(), short.clone(), bound),
                     Box::new(field),
                 ));
+                self.option_parameters.push((name, short, nargs, help));
             }
-            Parameter::Arg { name, .. } => {
-                // Derive the bound from nargs, in the context of an argument parameter.
-                let bound = match field.nargs {
-                    Nargs::Precisely(n) => Bound::Range(n, n),
-                    Nargs::ZeroOrOne => Bound::Range(1, 1),
-                    Nargs::Any => Bound::Lower(1),
-                };
-                self.arguments.push((
-                    ArgumentConfig::new(name.to_string(), bound)
-                        .expect("Argument construction must be valid."),
+            Parameter::Arg { name, help } => {
+                self.argument_captures.push((
+                    ArgumentConfig::new(name.to_string(), bound),
                     Box::new(field),
                 ));
+                self.argument_parameters.push((name, nargs, help));
             }
         };
         self
     }
 
-    fn parse_tokens(self, tokens: &[&str]) -> Result<(), ParseError> {
-        ParseCapture::new(self.options, self.arguments).consume(tokens)
+    pub fn build(self) -> Result<Parser<'ap>, ConfigError> {
+        Ok(Parser {
+            program: self.program,
+            option_parameters: self.option_parameters,
+            argument_parameters: self.argument_parameters,
+            parse_capture: ParseCapture::new(self.option_captures, self.argument_captures)?,
+            user_interface: Box::new(Console::default()),
+        })
+    }
+}
+
+pub struct Parser<'ap> {
+    program: &'ap str,
+    option_parameters: Vec<OptionParameter>,
+    argument_parameters: Vec<ArgumentParameter>,
+    parse_capture: ParseCapture<'ap>,
+    user_interface: Box<dyn UserInterface>,
+}
+
+fn print_help<'ap>(
+    program: &'ap str,
+    mut options: Vec<OptionParameter>,
+    arguments: Vec<ArgumentParameter>,
+    user_interface: Box<dyn UserInterface>,
+) {
+    options.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut summary = vec![format!("[-{HELP_SHORT}]")];
+
+    for (name, short, nargs, _) in &options {
+        let value = match nargs {
+            Nargs::Precisely(0) => "".to_string(),
+            Nargs::Precisely(n) => format!(
+                " {}",
+                (0..*n)
+                    .map(|_| name.to_ascii_uppercase())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            ),
+            Nargs::Any => format!(" [{} ...]", name.to_ascii_uppercase()),
+            Nargs::AtLeastOne => format!(" {} [...]", name.to_ascii_uppercase()),
+        };
+        match short {
+            Some(s) => summary.push(format!("[-{s}{value}]")),
+            None => summary.push(format!("[--{name}{value}]")),
+        };
+    }
+
+    for (name, nargs, _) in &arguments {
+        let value = match nargs {
+            Nargs::Precisely(n) => format!(
+                "{}",
+                (0..*n)
+                    .map(|_| name.to_ascii_uppercase())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            ),
+            Nargs::Any => format!("[{} ...]", name.to_ascii_uppercase()),
+            Nargs::AtLeastOne => format!("{} [...]", name.to_ascii_uppercase()),
+        };
+        summary.push(format!("{value}"));
+    }
+
+    user_interface.print_help(format!("usage: {program} {}", summary.join(" ")));
+}
+
+impl<'ap> Parser<'ap> {
+    fn parse_tokens(self, tokens: &[&str]) -> Result<Action, ()> {
+        match self.parse_capture.consume(tokens) {
+            Ok(Action::RunProgram) => Ok(Action::RunProgram),
+            Ok(Action::PrintHelp) => {
+                print_help(
+                    self.program,
+                    self.option_parameters,
+                    self.argument_parameters,
+                    self.user_interface,
+                );
+                Ok(Action::PrintHelp)
+            }
+            Err((offset, parse_error)) => {
+                self.user_interface.print_error(parse_error);
+                self.user_interface.print_context(tokens, offset);
+                Err(())
+            }
+        }
     }
 
     pub fn parse(self) {
@@ -118,31 +232,21 @@ impl<'ap> ArgumentParser<'ap> {
                 .as_slice(),
         );
 
-        if let Err(parse_error) = result {
-            std::process::exit(1);
-        }
+        match result {
+            Ok(Action::RunProgram) => {}
+            Ok(Action::PrintHelp) => {
+                std::process::exit(0);
+            }
+            Err(()) => {
+                std::process::exit(1);
+            }
+        };
     }
 }
 
-#[derive(Debug, Error)]
-pub enum ParseError {
-    #[error("Encountered error matching to parameters.")]
-    MatchError,
-
-    #[error("Encountered error capturing parameters.")]
-    CaptureError,
-}
-
-impl From<MatchError> for ParseError {
-    fn from(error: MatchError) -> Self {
-        ParseError::MatchError
-    }
-}
-
-impl From<AnonymousCaptureError> for ParseError {
-    fn from(error: AnonymousCaptureError) -> Self {
-        ParseError::CaptureError
-    }
+enum Action {
+    RunProgram,
+    PrintHelp,
 }
 
 struct ParseCapture<'ap> {
@@ -158,44 +262,65 @@ const HELP_NAME: &'static str = "help";
 const HELP_SHORT: char = 'h';
 
 impl<'ap> ParseCapture<'ap> {
-    fn new(options: Vec<OptionCapture<'ap>>, arguments: Vec<ArgumentCapture<'ap>>) -> Self {
+    fn new(
+        options: Vec<OptionCapture<'ap>>,
+        arguments: Vec<ArgumentCapture<'ap>>,
+    ) -> Result<Self, ConfigError> {
         let help_config =
-            OptionConfig::new(HELP_NAME.to_string(), Some(HELP_SHORT), Bound::Range(0, 1));
+            OptionConfig::new(HELP_NAME.to_string(), Some(HELP_SHORT), Bound::Range(0, 0));
         let mut option_configs = HashSet::from([help_config]);
         let mut argument_configs = VecDeque::default();
         let mut captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>> =
             HashMap::default();
 
         for (oc, f) in options.into_iter() {
-            assert!(captures.insert(oc.name(), f).is_none());
+            if captures.insert(oc.name(), f).is_some() {
+                return Err(ConfigError(format!(
+                    "Cannot duplicate the parameter '{}'.",
+                    oc.name()
+                )));
+            }
+
             option_configs.insert(oc);
         }
 
         for (ac, f) in arguments.into_iter() {
-            assert!(captures.insert(ac.name(), f).is_none());
+            if captures.insert(ac.name(), f).is_some() {
+                return Err(ConfigError(format!(
+                    "Cannot duplicate the parameter '{}'.",
+                    ac.name()
+                )));
+            }
+
             argument_configs.push_back(ac);
         }
 
-        Self {
-            token_matcher: TokenMatcher::new(option_configs, argument_configs),
+        let token_matcher = TokenMatcher::new(option_configs, argument_configs)?;
+
+        Ok(Self {
+            token_matcher,
             captures,
-        }
+        })
     }
 
-    fn consume(mut self, tokens: &[&str]) -> Result<(), ParseError> {
+    fn consume(mut self, tokens: &[&str]) -> Result<Action, (usize, ParseError)> {
         // 1. Feed the raw token strings to the matcher.
+        let mut fed = 0;
+
         for next in tokens {
-            self.token_matcher.feed(next)?;
+            let next_length = next.len();
+            self.token_matcher
+                .feed(next)
+                .map_err(|e| (fed, ParseError::from(e)))?;
+            fed += next_length;
         }
 
         let matches = match self.token_matcher.close() {
-            Ok(matches) | Err((MatchError::ArgumentsUnused, matches))
-                if matches.contains(HELP_NAME) =>
-            {
-                return Ok(());
+            Ok(matches) | Err((_, _, matches)) if matches.contains(HELP_NAME) => {
+                return Ok(Action::PrintHelp);
             }
             Ok(matches) => Ok(matches),
-            Err((e, _)) => Err(ParseError::from(e)),
+            Err((offset, e, _)) => Err((offset, ParseError::from(e))),
         }?;
 
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
@@ -204,18 +329,20 @@ impl<'ap> ParseCapture<'ap> {
             let mut box_capture = self
                 .captures
                 .remove(&match_tokens.name)
-                .expect("bad impl - mismatch between matches and captures");
+                .expect("internal error - mismatch between matches and captures");
             // 4. Let the capture know it has been matched.
             // Some captures may do something based off the fact they were simply matched.
             box_capture.matched();
 
             // 5. Convert each of the raw value strings into the capture type.
-            for value in &match_tokens.values {
-                box_capture.capture(value)?;
+            for (offset, value) in &match_tokens.values {
+                box_capture
+                    .capture(value)
+                    .map_err(|e| (*offset, ParseError::from(e)))?;
             }
         }
 
-        Ok(())
+        Ok(Action::RunProgram)
     }
 }
 
@@ -227,7 +354,7 @@ mod tests {
     #[test]
     fn ap_empty() {
         let ap = ArgumentParser::new("abc");
-        ap.parse_tokens(empty::slice()).unwrap();
+        ap.build().unwrap().parse_tokens(empty::slice()).unwrap();
     }
 
     #[rstest]
@@ -244,6 +371,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Value::new(&mut variable)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(tokens.as_slice())
         .unwrap();
         assert_eq!(variable, 1);
@@ -259,6 +388,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Switch::new(&mut variable, 2)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(tokens.as_slice())
         .unwrap();
         assert_eq!(variable, 2);
@@ -280,6 +411,8 @@ mod tests {
             Parameter::option("variable", Some('v')),
             Field::binding(Container::new(&mut variable)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(tokens.as_slice())
         .unwrap();
         assert_eq!(variable, expected);
@@ -293,6 +426,8 @@ mod tests {
             Parameter::argument("variable"),
             Field::binding(Value::new(&mut variable)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(vec!["1"].as_slice())
         .unwrap();
         assert_eq!(variable, 1);
@@ -309,6 +444,8 @@ mod tests {
             Parameter::argument("variable"),
             Field::binding(Container::new(&mut variable)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(&tokens[..])
         .unwrap();
         assert_eq!(variable, expected);
@@ -328,6 +465,8 @@ mod tests {
             Parameter::argument("variable"),
             Field::binding(Value::new(&mut variable)),
         )
+        .build()
+        .unwrap()
         .parse_tokens(tokens.as_slice())
         .unwrap();
         assert_eq!(variable, 0);

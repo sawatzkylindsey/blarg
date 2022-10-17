@@ -47,15 +47,14 @@ fn main() {
     let mut countries: HashSet<Country> = HashSet::default();
     let mut items: Vec<u32> = Vec::default();
 
-    let mut ap = ArgumentParser::new("reducer");
-    println!("{:?}", ap);
-    ap = ap
+    let ap = ArgumentParser::new("reducer");
+    let parser = ap
         .add(
             Parameter::option("verbose", Some('v')).help("do dee doo"),
             Field::binding(Switch::new(&mut verbose, true)),
         )
         .add(
-            Parameter::option("operand", None),
+            Parameter::option("operand", Some('o')),
             Field::binding(Value::new(&mut operand)),
         )
         .add(
@@ -69,9 +68,11 @@ fn main() {
         .add(
             Parameter::argument("items").help("the items todo"),
             Field::binding(Container::new(&mut items)),
-        );
-    ap.parse();
-    println!("{items:?}");
+        )
+        .build()
+        .expect("Invalid argument parser configuration");
+    parser.parse();
+    println!("Items: {items:?}");
     execute(verbose, operand, initial, countries, items);
 }
 
