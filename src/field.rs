@@ -160,7 +160,7 @@ where
         **self.variable.borrow_mut() = self
             .target
             .take()
-            .expect("Must be able to take the Switch#target.");
+            .expect("internal error - must be able to take the Switch#target");
     }
 
     fn capture(&mut self, _str_value: &str) -> Result<(), GenericCaptureError<T>> {

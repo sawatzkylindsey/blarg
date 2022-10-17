@@ -20,7 +20,7 @@ impl Distribution<Bound> for Standard {
                 }
             }
             1 => Bound::Lower(rng.gen()),
-            _ => panic!("impossible gen_range()"),
+            _ => panic!("internal error - impossible gen_range()"),
         }
     }
 }
@@ -78,23 +78,33 @@ impl OptionConfig {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) struct MatchTokens {
     pub name: String,
-    pub values: Vec<String>,
+    pub values: Vec<OffsetValue>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(super) enum CloseError {
-    #[error("Too few values provided (expected={expected}, found={found}).")]
-    TooFewValues { expected: u8, found: usize },
+    #[error("Too few values provided for '{name}' (provided={provided}, expected={expected}).")]
+    TooFewValues {
+        name: String,
+        provided: usize,
+        expected: u8,
+    },
 
-    #[error("Too many values provided (expected={expected}, found={found}).")]
-    TooManyValues { expected: u8, found: usize },
+    #[error("Too many values provided for '{name}' (provided={provided}, expected={expected}).")]
+    TooManyValues {
+        name: String,
+        provided: usize,
+        expected: u8,
+    },
 }
+
+type OffsetValue = (usize, String);
 
 #[derive(Debug)]
 pub(super) struct MatchBuffer {
     name: String,
     bound: Bound,
-    values: Vec<String>,
+    values: Vec<OffsetValue>,
 }
 
 impl MatchBuffer {
@@ -106,8 +116,8 @@ impl MatchBuffer {
         }
     }
 
-    pub(super) fn push(&mut self, value: String) {
-        self.values.push(value);
+    pub(super) fn push(&mut self, offset: usize, value: String) {
+        self.values.push((offset, value));
     }
 
     pub(super) fn is_open(&self) -> bool {
@@ -122,21 +132,24 @@ impl MatchBuffer {
             Bound::Lower(n) => {
                 if self.values.len() < n as usize {
                     return Err(CloseError::TooFewValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: n,
-                        found: self.values.len(),
                     });
                 }
             }
             Bound::Range(i, j) => {
                 if self.values.len() < i as usize {
                     return Err(CloseError::TooFewValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: i,
-                        found: self.values.len(),
                     });
                 } else if self.values.len() > j as usize {
                     return Err(CloseError::TooManyValues {
+                        name: self.name,
+                        provided: self.values.len(),
                         expected: j,
-                        found: self.values.len(),
                     });
                 }
             }
@@ -211,10 +224,12 @@ mod tests {
         };
         let mut pb = MatchBuffer::new(name.clone(), bound);
         assert!(pb.is_open());
-        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+        let tokens: Vec<(usize, String)> = (0..feed)
+            .map(|i| (thread_rng().gen(), i.to_string()))
+            .collect();
 
-        for token in &tokens {
-            pb.push(token.clone());
+        for (offset, token) in &tokens {
+            pb.push(*offset, token.clone());
         }
 
         assert_eq!(pb.is_open(), remains_open);
@@ -231,8 +246,9 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooFewValues {
+                    name,
+                    provided: feed as usize,
                     expected: lower,
-                    found: feed as usize
                 }
             );
         }
@@ -255,10 +271,12 @@ mod tests {
         let remains_open = upper > feed;
         let mut pb = MatchBuffer::new(name.clone(), bound);
         assert_eq!(pb.is_open(), starts_open);
-        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+        let tokens: Vec<(usize, String)> = (0..feed)
+            .map(|i| (thread_rng().gen(), i.to_string()))
+            .collect();
 
-        for token in &tokens {
-            pb.push(token.clone());
+        for (offset, token) in &tokens {
+            pb.push(*offset, token.clone());
         }
 
         if expected_ok {
@@ -274,8 +292,9 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooManyValues {
+                    name,
+                    provided: feed as usize,
                     expected: upper,
-                    found: feed as usize
                 }
             );
         }
