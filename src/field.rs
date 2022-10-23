@@ -32,11 +32,7 @@ pub trait CliArgument {}
 ///
 /// We use this at the bottom of the argument parser object graph so the compiler can maintain each field's type.
 #[doc(hidden)]
-pub trait GenericCapturable<'ap, T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
+pub trait GenericCapturable<'ap, T> {
     /// Declare that the parameter has been matched.
     fn matched(&mut self);
 
@@ -74,7 +70,7 @@ pub struct Value<'ap, T> {
 impl<'ap, T> CliOption for Value<'ap, T> {}
 impl<'ap, T> CliArgument for Value<'ap, T> {}
 
-impl<'ap, T: FromStr + std::fmt::Debug> Value<'ap, T> {
+impl<'ap, T> Value<'ap, T> {
     pub fn new(variable: &'ap mut T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -84,8 +80,7 @@ impl<'ap, T: FromStr + std::fmt::Debug> Value<'ap, T> {
 
 impl<'ap, T> GenericCapturable<'ap, T> for Value<'ap, T>
 where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
+    T: FromStr,
 {
     fn matched(&mut self) {
         // Do nothing.
@@ -122,9 +117,9 @@ pub struct Switch<'ap, T> {
     target: Option<T>,
 }
 
-impl<'ap, T: FromStr + std::fmt::Debug> CliOption for Switch<'ap, T> {}
+impl<'ap, T> CliOption for Switch<'ap, T> {}
 
-impl<'ap, T: FromStr + std::fmt::Debug> Switch<'ap, T> {
+impl<'ap, T> Switch<'ap, T> {
     pub fn new(variable: &'ap mut T, target: T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -133,11 +128,7 @@ impl<'ap, T: FromStr + std::fmt::Debug> Switch<'ap, T> {
     }
 }
 
-impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
+impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T> {
     fn matched(&mut self) {
         **self.variable.borrow_mut() = self
             .target
@@ -161,9 +152,9 @@ pub struct Optional<'ap, T> {
     variable: Rc<RefCell<&'ap mut Option<T>>>,
 }
 
-impl<'ap, T: FromStr + std::fmt::Debug> CliOption for Optional<'ap, T> {}
+impl<'ap, T> CliOption for Optional<'ap, T> {}
 
-impl<'ap, T: FromStr + std::fmt::Debug> Optional<'ap, T> {
+impl<'ap, T> Optional<'ap, T> {
     pub fn new(variable: &'ap mut Option<T>) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -173,8 +164,7 @@ impl<'ap, T: FromStr + std::fmt::Debug> Optional<'ap, T> {
 
 impl<'ap, T> GenericCapturable<'ap, T> for Optional<'ap, T>
 where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
+    T: FromStr,
 {
     fn matched(&mut self) {
         // Do nothing
@@ -223,9 +213,8 @@ where
 
 impl<'ap, C, T> GenericCapturable<'ap, T> for Collection<'ap, C, T>
 where
+    T: FromStr,
     C: 'ap + Collectable<T> + Nargable,
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
 {
     fn matched(&mut self) {
         // Do nothing.
@@ -252,11 +241,7 @@ pub struct Field<'ap, T: 'ap> {
     generic_capturable: Box<dyn GenericCapturable<'ap, T> + 'ap>,
 }
 
-impl<'ap, T> Field<'ap, T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
+impl<'ap, T> Field<'ap, T> {
     pub(crate) fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
         Self {
             nargs: generic_capturable.nargs(),
@@ -265,11 +250,7 @@ where
     }
 }
 
-impl<'ap, T> AnonymousCapturable for Field<'ap, T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
+impl<'ap, T> AnonymousCapturable for Field<'ap, T> {
     fn matched(&mut self) {
         self.generic_capturable.matched();
     }

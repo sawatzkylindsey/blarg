@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
-use std::str::FromStr;
 use thiserror::Error;
 
 use crate::field::*;
@@ -52,11 +51,7 @@ pub enum Parameter<'ap, T> {
     },
 }
 
-impl<'ap, T> Parameter<'ap, T>
-where
-    T: FromStr + std::fmt::Debug,
-    <T as FromStr>::Err: std::fmt::Debug,
-{
+impl<'ap, T> Parameter<'ap, T> {
     pub fn option(
         generic_capturable: impl GenericCapturable<'ap, T> + CliOption + 'ap,
         name: &'static str,
@@ -130,11 +125,7 @@ impl<'ap> ArgumentParser<'ap> {
         }
     }
 
-    pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self
-    where
-        T: FromStr + std::fmt::Debug,
-        <T as FromStr>::Err: std::fmt::Debug,
-    {
+    pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
         match parameter {
             Parameter::Opt {
                 name,
