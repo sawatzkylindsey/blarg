@@ -22,6 +22,12 @@ pub(crate) trait Nargable {
     fn nargs() -> Nargs;
 }
 
+/// Marker trait for capturable types that can formulate an option in the CLI
+pub trait CliOption {}
+
+/// Marker trait for capturable types that can formulate an argument in the CLI.
+pub trait CliArgument {}
+
 /// Behaviour to capture an explicit generic type T from an input `&str`.
 ///
 /// We use this at the bottom of the argument parser object graph so the compiler can maintain each field's type.
@@ -61,9 +67,12 @@ pub(crate) trait AnonymousCapturable {
 }
 
 /// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
-pub struct Value<'ap, T: 'ap> {
+pub struct Value<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
 }
+
+impl<'ap, T> CliOption for Value<'ap, T> {}
+impl<'ap, T> CliArgument for Value<'ap, T> {}
 
 impl<'ap, T: FromStr + std::fmt::Debug> Value<'ap, T> {
     pub fn new(variable: &'ap mut T) -> Self {
@@ -108,10 +117,12 @@ where
 /// // Implement switch behaviour via specialization - aka: polymorphism.
 /// impl<bool> Collectable<bool> for Option<bool> {
 /// ```
-pub struct Switch<'ap, T: 'ap> {
+pub struct Switch<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
     target: Option<T>,
 }
+
+impl<'ap, T: FromStr + std::fmt::Debug> CliOption for Switch<'ap, T> {}
 
 impl<'ap, T: FromStr + std::fmt::Debug> Switch<'ap, T> {
     pub fn new(variable: &'ap mut T, target: T) -> Self {
@@ -143,9 +154,50 @@ where
     }
 }
 
+/// Describes an option parameter that maps down to `Option`, taking a single value `Nargs::Precisely(1)`.
+/// This can never be used as an argument parameter by "blarg" paradigm.
+/// That is, if the value is an `Option`, then it must not be an argument - it is by definition optional
+pub struct Optional<'ap, T> {
+    variable: Rc<RefCell<&'ap mut Option<T>>>,
+}
+
+impl<'ap, T: FromStr + std::fmt::Debug> CliOption for Optional<'ap, T> {}
+
+impl<'ap, T: FromStr + std::fmt::Debug> Optional<'ap, T> {
+    pub fn new(variable: &'ap mut Option<T>) -> Self {
+        Self {
+            variable: Rc::new(RefCell::new(variable)),
+        }
+    }
+}
+
+impl<'ap, T> GenericCapturable<'ap, T> for Optional<'ap, T>
+where
+    T: FromStr + std::fmt::Debug,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    fn matched(&mut self) {
+        // Do nothing
+    }
+
+    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
+        let result: Result<T, InvalidConversion> =
+            T::from_str(token).map_err(|_| InvalidConversion {
+                token: token.to_string(),
+                type_name: std::any::type_name::<T>(),
+            });
+        let value = result?;
+        self.variable.borrow_mut().replace(value);
+        Ok(())
+    }
+
+    fn nargs(&self) -> Nargs {
+        Nargs::Precisely(1)
+    }
+}
+
 /// Describes an argument/option parameter that takes multiple values.
-/// The exact `Nargs` is derived by the specific `Collectable` implementation.
-pub struct Container<'ap, C, T>
+pub struct Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T>,
 {
@@ -153,7 +205,11 @@ where
     _phantom: PhantomData<T>,
 }
 
-impl<'ap, C, T> Container<'ap, C, T>
+impl<'ap, C, T> CliOption for Collection<'ap, C, T> where C: 'ap + Collectable<T> {}
+
+impl<'ap, C, T> CliArgument for Collection<'ap, C, T> where C: 'ap + Collectable<T> {}
+
+impl<'ap, C, T> Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T>,
 {
@@ -165,7 +221,7 @@ where
     }
 }
 
-impl<'ap, C, T> GenericCapturable<'ap, T> for Container<'ap, C, T>
+impl<'ap, C, T> GenericCapturable<'ap, T> for Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T> + Nargable,
     T: FromStr + std::fmt::Debug,
@@ -201,7 +257,7 @@ where
     T: FromStr + std::fmt::Debug,
     <T as FromStr>::Err: std::fmt::Debug,
 {
-    pub fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
+    pub(crate) fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
         Self {
             nargs: generic_capturable.nargs(),
             generic_capturable: Box::new(generic_capturable),
@@ -255,26 +311,29 @@ mod tests {
     }
 
     #[test]
-    fn container_capture() {
+    fn optional_capture() {
         // Option<u32>
         let mut variable: Option<u32> = None;
-        let mut container = Container::new(&mut variable);
-        container.capture("1").unwrap();
+        let mut optional = Optional::new(&mut variable);
+        optional.capture("1").unwrap();
         assert_eq!(variable, Some(1));
+    }
 
+    #[test]
+    fn collection_capture() {
         // Vec<u32>
         let mut variable: Vec<u32> = Vec::default();
-        let mut container = Container::new(&mut variable);
-        container.capture("1").unwrap();
-        container.capture("0").unwrap();
+        let mut collection = Collection::new(&mut variable);
+        collection.capture("1").unwrap();
+        collection.capture("0").unwrap();
         assert_eq!(variable, vec![1, 0]);
 
         // HashSet<u32>
         let mut variable: HashSet<u32> = HashSet::default();
-        let mut container = Container::new(&mut variable);
-        container.capture("1").unwrap();
-        container.capture("0").unwrap();
-        container.capture("0").unwrap();
+        let mut collection = Collection::new(&mut variable);
+        collection.capture("1").unwrap();
+        collection.capture("0").unwrap();
+        collection.capture("0").unwrap();
         assert_eq!(variable, HashSet::from([0, 1]));
     }
 
@@ -304,10 +363,18 @@ mod tests {
     }
 
     #[test]
-    fn container_matched() {
+    fn optional_matched() {
+        let mut variable: Option<u32> = None;
+        let mut optional = Optional::new(&mut variable);
+        optional.matched();
+        assert_eq!(variable, None);
+    }
+
+    #[test]
+    fn collection_matched() {
         let mut variable: Vec<u32> = Vec::default();
-        let mut container = Container::new(&mut variable);
-        container.matched();
+        let mut collection = Collection::new(&mut variable);
+        collection.matched();
         assert_eq!(variable, vec![]);
     }
 
@@ -321,26 +388,12 @@ mod tests {
         let switch = Switch::new(&mut variable, 2);
         assert_eq!(switch.nargs(), Nargs::Precisely(0));
 
-        let mut variable: Vec<u32> = Vec::default();
-        let container = Container::new(&mut variable);
-        assert_eq!(container.nargs(), Nargs::AtLeastOne);
-
         let mut variable: Option<u32> = None;
-        let container = Container::new(&mut variable);
-        assert_eq!(container.nargs(), Nargs::Precisely(1));
+        let optional = Optional::new(&mut variable);
+        assert_eq!(optional.nargs(), Nargs::Precisely(1));
+
+        let mut variable: Vec<u32> = Vec::default();
+        let collection = Collection::new(&mut variable);
+        assert_eq!(collection.nargs(), Nargs::AtLeastOne);
     }
-
-    /*#[test]
-    fn test_field() {
-        let mut variable: u32 = u32::default();
-        let mut value = Value::new(&mut variable);
-        value.capture("5").unwrap();
-        assert_eq!(variable, 5);
-
-        let mut variable: u32 = u32::default();
-        let mut field = Field::binding(Value::new(&mut variable));
-        field.matched();
-        field.capture("1").unwrap();
-        assert_eq!(variable, 1);
-    }*/
 }

@@ -32,18 +32,6 @@ impl<T> Nargable for HashSet<T> {
     }
 }
 
-impl<T> Collectable<T> for Option<T> {
-    fn add(&mut self, item: T) {
-        self.replace(item);
-    }
-}
-
-impl<T> Nargable for Option<T> {
-    fn nargs() -> Nargs {
-        Nargs::Precisely(1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,18 +55,5 @@ mod tests {
         assert_eq!(collection, HashSet::from([1, 0]));
 
         assert!(matches!(HashSet::<u32>::nargs(), Nargs::AtLeastOne));
-    }
-
-    #[test]
-    fn option() {
-        let mut collection: Option<u32> = None;
-        collection.add(1);
-        assert_eq!(collection, Some(1));
-
-        let mut collection: Option<u32> = Some(2);
-        collection.add(1);
-        assert_eq!(collection, Some(1));
-
-        assert!(matches!(Option::<u32>::nargs(), Nargs::Precisely(1)));
     }
 }

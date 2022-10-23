@@ -1,4 +1,4 @@
-use blarg::field::{Container, Field, Switch, Value};
+use blarg::field::{Collection, Optional, Switch, Value};
 use blarg::parser::{ArgumentParser, Parameter};
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -50,25 +50,25 @@ fn main() {
     let ap = ArgumentParser::new("reducer");
     let parser = ap
         .add(
-            Parameter::option("verbose", Some('v')).help("do dee doo"),
-            Field::binding(Switch::new(&mut verbose, true)),
+            Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))
+                .help("do dee doo"),
         )
-        .add(
-            Parameter::option("operand", Some('o')),
-            Field::binding(Value::new(&mut operand)),
-        )
-        .add(
-            Parameter::option("initial", None),
-            Field::binding(Container::new(&mut initial)),
-        )
-        .add(
-            Parameter::option("countries", None),
-            Field::binding(Container::new(&mut countries)),
-        )
-        .add(
-            Parameter::argument("items").help("the items todo"),
-            Field::binding(Container::new(&mut items)),
-        )
+        .add(Parameter::option(
+            Value::new(&mut operand),
+            "operand",
+            Some('o'),
+        ))
+        .add(Parameter::option(
+            Optional::new(&mut initial),
+            "initial",
+            None,
+        ))
+        .add(Parameter::option(
+            Collection::new(&mut countries),
+            "countries",
+            None,
+        ))
+        .add(Parameter::argument(Collection::new(&mut items), "items").help("the items todo"))
         .build()
         .expect("Invalid argument parser configuration");
     parser.parse();

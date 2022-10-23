@@ -38,40 +38,61 @@ impl From<InvalidConversion> for ParseError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Parameter {
+pub enum Parameter<'ap, T> {
     Opt {
+        field: Field<'ap, T>,
         name: &'static str,
         short: Option<char>,
         help: Option<&'static str>,
     },
     Arg {
+        field: Field<'ap, T>,
         name: &'static str,
         help: Option<&'static str>,
     },
 }
 
-impl Parameter {
-    pub fn option(name: &'static str, short: Option<char>) -> Self {
+impl<'ap, T> Parameter<'ap, T>
+where
+    T: FromStr + std::fmt::Debug,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn option(
+        generic_capturable: impl GenericCapturable<'ap, T> + CliOption + 'ap,
+        name: &'static str,
+        short: Option<char>,
+    ) -> Self {
         Parameter::Opt {
+            field: Field::binding(generic_capturable),
             name,
             short,
             help: None,
         }
     }
 
-    pub fn argument(name: &'static str) -> Self {
-        Parameter::Arg { name, help: None }
+    pub fn argument(
+        generic_capturable: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
+        name: &'static str,
+    ) -> Self {
+        Parameter::Arg {
+            field: Field::binding(generic_capturable),
+            name,
+            help: None,
+        }
     }
 
     pub fn help(self, message: &'static str) -> Self {
         match self {
-            Parameter::Opt { name, short, .. } => Parameter::Opt {
+            Parameter::Opt {
+                field, name, short, ..
+            } => Parameter::Opt {
+                field,
                 name,
                 short,
                 help: Some(message),
             },
-            Parameter::Arg { name, .. } => Parameter::Arg {
+            Parameter::Arg { field, name, .. } => Parameter::Arg {
+                field,
                 name,
                 help: Some(message),
             },
@@ -109,25 +130,29 @@ impl<'ap> ArgumentParser<'ap> {
         }
     }
 
-    pub fn add<T>(mut self, parameter: Parameter, field: Field<'ap, T>) -> Self
+    pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self
     where
         T: FromStr + std::fmt::Debug,
         <T as FromStr>::Err: std::fmt::Debug,
     {
-        let bound = Bound::from(field.nargs);
-        let nargs = field.nargs.clone();
-
         match parameter {
-            Parameter::Opt { name, short, help } => {
+            Parameter::Opt {
+                name,
+                short,
+                field,
+                help,
+            } => {
+                let nargs = field.nargs.clone();
                 self.option_captures.push((
-                    OptionConfig::new(name.to_string(), short.clone(), bound),
+                    OptionConfig::new(name.to_string(), short.clone(), Bound::from(field.nargs)),
                     Box::new(field),
                 ));
                 self.option_parameters.push((name, short, nargs, help));
             }
-            Parameter::Arg { name, help } => {
+            Parameter::Arg { name, field, help } => {
+                let nargs = field.nargs.clone();
                 self.argument_captures.push((
-                    ArgumentConfig::new(name.to_string(), bound),
+                    ArgumentConfig::new(name.to_string(), Bound::from(field.nargs)),
                     Box::new(field),
                 ));
                 self.argument_parameters.push((name, nargs, help));
@@ -367,10 +392,11 @@ mod tests {
     fn ap_option_value(#[case] tokens: Vec<&str>) {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = 0;
-        ap.add(
-            Parameter::option("variable", Some('v')),
-            Field::binding(Value::new(&mut variable)),
-        )
+        ap.add(Parameter::option(
+            Value::new(&mut variable),
+            "variable",
+            Some('v'),
+        ))
         .build()
         .unwrap()
         .parse_tokens(tokens.as_slice())
@@ -384,10 +410,11 @@ mod tests {
     fn ap_option_switch(#[case] tokens: Vec<&str>) {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = 0;
-        ap.add(
-            Parameter::option("variable", Some('v')),
-            Field::binding(Switch::new(&mut variable, 2)),
-        )
+        ap.add(Parameter::option(
+            Switch::new(&mut variable, 2),
+            "variable",
+            Some('v'),
+        ))
         .build()
         .unwrap()
         .parse_tokens(tokens.as_slice())
@@ -407,10 +434,11 @@ mod tests {
     fn ap_option_container(#[case] tokens: Vec<&str>, #[case] expected: Vec<u32>) {
         let ap = ArgumentParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
-        ap.add(
-            Parameter::option("variable", Some('v')),
-            Field::binding(Container::new(&mut variable)),
-        )
+        ap.add(Parameter::option(
+            Collection::new(&mut variable),
+            "variable",
+            Some('v'),
+        ))
         .build()
         .unwrap()
         .parse_tokens(tokens.as_slice())
@@ -422,14 +450,11 @@ mod tests {
     fn ap_argument_value() {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = 0;
-        ap.add(
-            Parameter::argument("variable"),
-            Field::binding(Value::new(&mut variable)),
-        )
-        .build()
-        .unwrap()
-        .parse_tokens(vec!["1"].as_slice())
-        .unwrap();
+        ap.add(Parameter::argument(Value::new(&mut variable), "variable"))
+            .build()
+            .unwrap()
+            .parse_tokens(vec!["1"].as_slice())
+            .unwrap();
         assert_eq!(variable, 1);
     }
 
@@ -440,10 +465,10 @@ mod tests {
     fn ap_argument_container(#[case] tokens: Vec<&str>, #[case] expected: Vec<u32>) {
         let ap = ArgumentParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
-        ap.add(
-            Parameter::argument("variable"),
-            Field::binding(Container::new(&mut variable)),
-        )
+        ap.add(Parameter::argument(
+            Collection::new(&mut variable),
+            "variable",
+        ))
         .build()
         .unwrap()
         .parse_tokens(&tokens[..])
@@ -461,14 +486,11 @@ mod tests {
     fn ap_help(#[case] tokens: Vec<&str>) {
         let ap = ArgumentParser::new("abc");
         let mut variable: u32 = 0;
-        ap.add(
-            Parameter::argument("variable"),
-            Field::binding(Value::new(&mut variable)),
-        )
-        .build()
-        .unwrap()
-        .parse_tokens(tokens.as_slice())
-        .unwrap();
+        ap.add(Parameter::argument(Value::new(&mut variable), "variable"))
+            .build()
+            .unwrap()
+            .parse_tokens(tokens.as_slice())
+            .unwrap();
         assert_eq!(variable, 0);
     }
 }
