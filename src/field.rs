@@ -18,10 +18,6 @@ pub enum Nargs {
     AtLeastOne,
 }
 
-pub(crate) trait Nargable {
-    fn nargs() -> Nargs;
-}
-
 /// Marker trait for capturable types that can formulate an option in the CLI
 pub trait CliOption {}
 
@@ -192,6 +188,7 @@ where
     C: 'ap + Collectable<T>,
 {
     variable: Rc<RefCell<&'ap mut C>>,
+    nargs: Nargs,
     _phantom: PhantomData<T>,
 }
 
@@ -203,9 +200,10 @@ impl<'ap, C, T> Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T>,
 {
-    pub fn new(variable: &'ap mut C) -> Self {
+    pub fn new(variable: &'ap mut C, nargs: Nargs) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
+            nargs,
             _phantom: PhantomData,
         }
     }
@@ -214,7 +212,7 @@ where
 impl<'ap, C, T> GenericCapturable<'ap, T> for Collection<'ap, C, T>
 where
     T: FromStr,
-    C: 'ap + Collectable<T> + Nargable,
+    C: 'ap + Collectable<T>,
 {
     fn matched(&mut self) {
         // Do nothing.
@@ -232,19 +230,17 @@ where
     }
 
     fn nargs(&self) -> Nargs {
-        C::nargs()
+        self.nargs
     }
 }
 
 pub struct Field<'ap, T: 'ap> {
-    pub(crate) nargs: Nargs,
     generic_capturable: Box<dyn GenericCapturable<'ap, T> + 'ap>,
 }
 
 impl<'ap, T> Field<'ap, T> {
     pub(crate) fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
         Self {
-            nargs: generic_capturable.nargs(),
             generic_capturable: Box::new(generic_capturable),
         }
     }
@@ -304,14 +300,14 @@ mod tests {
     fn collection_capture() {
         // Vec<u32>
         let mut variable: Vec<u32> = Vec::default();
-        let mut collection = Collection::new(&mut variable);
+        let mut collection = Collection::new(&mut variable, Nargs::Any);
         collection.capture("1").unwrap();
         collection.capture("0").unwrap();
         assert_eq!(variable, vec![1, 0]);
 
         // HashSet<u32>
         let mut variable: HashSet<u32> = HashSet::default();
-        let mut collection = Collection::new(&mut variable);
+        let mut collection = Collection::new(&mut variable, Nargs::Any);
         collection.capture("1").unwrap();
         collection.capture("0").unwrap();
         collection.capture("0").unwrap();
@@ -354,7 +350,7 @@ mod tests {
     #[test]
     fn collection_matched() {
         let mut variable: Vec<u32> = Vec::default();
-        let mut collection = Collection::new(&mut variable);
+        let mut collection = Collection::new(&mut variable, Nargs::Any);
         collection.matched();
         assert_eq!(variable, vec![]);
     }
@@ -374,7 +370,11 @@ mod tests {
         assert_eq!(optional.nargs(), Nargs::Precisely(1));
 
         let mut variable: Vec<u32> = Vec::default();
-        let collection = Collection::new(&mut variable);
+        let collection = Collection::new(&mut variable, Nargs::Any);
+        assert_eq!(collection.nargs(), Nargs::Any);
+
+        let mut variable: Vec<u32> = Vec::default();
+        let collection = Collection::new(&mut variable, Nargs::AtLeastOne);
         assert_eq!(collection.nargs(), Nargs::AtLeastOne);
     }
 }

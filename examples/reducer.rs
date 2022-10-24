@@ -1,4 +1,4 @@
-use blarg::field::{Collection, Optional, Switch, Value};
+use blarg::field::{Collection, Nargs, Optional, Switch, Value};
 use blarg::parser::{ArgumentParser, Parameter};
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -51,7 +51,7 @@ fn main() {
     let parser = ap
         .add(
             Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))
-                .help("do dee doo"),
+                .help("Do dee doo."),
         )
         .add(Parameter::option(
             Value::new(&mut operand),
@@ -64,11 +64,13 @@ fn main() {
             None,
         ))
         .add(Parameter::option(
-            Collection::new(&mut countries),
-            "countries",
+            Collection::new(&mut countries, Nargs::AtLeastOne),
+            "country",
             None,
         ))
-        .add(Parameter::argument(Collection::new(&mut items), "items").help("the items todo"))
+        .add(
+            Parameter::argument(Collection::new(&mut items, Nargs::Any), "item").help("The items."),
+        )
         .build()
         .expect("Invalid argument parser configuration");
     parser.parse();

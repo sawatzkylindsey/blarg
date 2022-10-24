@@ -40,14 +40,16 @@ impl From<InvalidConversion> for ParseError {
 pub enum Parameter<'ap, T> {
     Opt {
         field: Field<'ap, T>,
+        nargs: Nargs,
         name: &'static str,
         short: Option<char>,
-        help: Option<&'static str>,
+        description: Option<&'static str>,
     },
     Arg {
         field: Field<'ap, T>,
+        nargs: Nargs,
         name: &'static str,
-        help: Option<&'static str>,
+        description: Option<&'static str>,
     },
 }
 
@@ -57,11 +59,13 @@ impl<'ap, T> Parameter<'ap, T> {
         name: &'static str,
         short: Option<char>,
     ) -> Self {
+        let nargs = generic_capturable.nargs();
         Parameter::Opt {
             field: Field::binding(generic_capturable),
+            nargs,
             name,
             short,
-            help: None,
+            description: None,
         }
     }
 
@@ -69,34 +73,44 @@ impl<'ap, T> Parameter<'ap, T> {
         generic_capturable: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
         name: &'static str,
     ) -> Self {
+        let nargs = generic_capturable.nargs();
         Parameter::Arg {
             field: Field::binding(generic_capturable),
+            nargs,
             name,
-            help: None,
+            description: None,
         }
     }
 
     pub fn help(self, message: &'static str) -> Self {
         match self {
             Parameter::Opt {
-                field, name, short, ..
-            } => Parameter::Opt {
                 field,
+                nargs,
                 name,
                 short,
-                help: Some(message),
-            },
-            Parameter::Arg { field, name, .. } => Parameter::Arg {
+                ..
+            } => Parameter::Opt {
                 field,
+                nargs,
                 name,
-                help: Some(message),
+                short,
+                description: Some(message),
+            },
+            Parameter::Arg {
+                field, nargs, name, ..
+            } => Parameter::Arg {
+                field,
+                nargs,
+                name,
+                description: Some(message),
             },
         }
     }
 }
 
-type OptionParameter = (&'static str, Option<char>, Nargs, Option<&'static str>);
-type ArgumentParameter = (&'static str, Nargs, Option<&'static str>);
+type OptionParameter = (String, Option<char>, Nargs, Option<&'static str>);
+type ArgumentParameter = (String, Nargs, Option<&'static str>);
 
 pub struct ArgumentParser<'ap> {
     program: &'ap str,
@@ -128,25 +142,31 @@ impl<'ap> ArgumentParser<'ap> {
     pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
         match parameter {
             Parameter::Opt {
+                field,
+                nargs,
                 name,
                 short,
-                field,
-                help,
+                description,
             } => {
-                let nargs = field.nargs.clone();
                 self.option_captures.push((
-                    OptionConfig::new(name.to_string(), short.clone(), Bound::from(field.nargs)),
+                    OptionConfig::new(name.to_string(), short.clone(), Bound::from(nargs)),
                     Box::new(field),
                 ));
-                self.option_parameters.push((name, short, nargs, help));
+                self.option_parameters
+                    .push((name.to_string(), short, nargs, description));
             }
-            Parameter::Arg { name, field, help } => {
-                let nargs = field.nargs.clone();
+            Parameter::Arg {
+                field,
+                nargs,
+                name,
+                description,
+            } => {
                 self.argument_captures.push((
-                    ArgumentConfig::new(name.to_string(), Bound::from(field.nargs)),
+                    ArgumentConfig::new(name.to_string(), Bound::from(nargs)),
                     Box::new(field),
                 ));
-                self.argument_parameters.push((name, nargs, help));
+                self.argument_parameters
+                    .push((name.to_string(), nargs, description));
             }
         };
         self
@@ -178,10 +198,13 @@ fn print_help<'ap>(
     user_interface: Box<dyn UserInterface>,
 ) {
     options.sort_by(|a, b| a.0.cmp(&b.0));
+    let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
     let mut summary = vec![format!("[-{HELP_SHORT}]")];
+    let mut column_width = help_flags.len();
+    let mut grammars: HashMap<String, String> = HashMap::default();
 
     for (name, short, nargs, _) in &options {
-        let value = match nargs {
+        let grammar = match nargs {
             Nargs::Precisely(0) => "".to_string(),
             Nargs::Precisely(n) => format!(
                 " {}",
@@ -193,14 +216,27 @@ fn print_help<'ap>(
             Nargs::Any => format!(" [{} ...]", name.to_ascii_uppercase()),
             Nargs::AtLeastOne => format!(" {} [...]", name.to_ascii_uppercase()),
         };
+        grammars.insert(name.clone(), grammar.clone());
         match short {
-            Some(s) => summary.push(format!("[-{s}{value}]")),
-            None => summary.push(format!("[--{name}{value}]")),
+            Some(s) => {
+                if column_width < name.len() + grammar.len() + 6 {
+                    column_width = name.len() + grammar.len() + 6;
+                }
+
+                summary.push(format!("[-{s}{grammar}]"));
+            }
+            None => {
+                if column_width < name.len() + grammar.len() + 2 {
+                    column_width = name.len() + grammar.len() + 2;
+                }
+
+                summary.push(format!("[--{name}{grammar}]"));
+            }
         };
     }
 
     for (name, nargs, _) in &arguments {
-        let value = match nargs {
+        let grammar = match nargs {
             Nargs::Precisely(n) => format!(
                 "{}",
                 (0..*n)
@@ -211,10 +247,57 @@ fn print_help<'ap>(
             Nargs::Any => format!("[{} ...]", name.to_ascii_uppercase()),
             Nargs::AtLeastOne => format!("{} [...]", name.to_ascii_uppercase()),
         };
-        summary.push(format!("{value}"));
+        grammars.insert(name.clone(), grammar.clone());
+
+        if column_width < grammar.len() {
+            column_width = grammar.len();
+        }
+
+        summary.push(format!("{grammar}"));
     }
 
     user_interface.print_help(format!("usage: {program} {}", summary.join(" ")));
+
+    if !arguments.is_empty() {
+        user_interface.print_help("".to_string());
+        user_interface.print_help("positional arguments:".to_string());
+
+        for (name, _, description) in &arguments {
+            let grammar = grammars
+                .remove(name)
+                .expect("internal error - must have been set");
+            let argument_description = match description {
+                Some(message) => format!("  {message}"),
+                None => "".to_string(),
+            };
+            user_interface.print_help(format!(" {:column_width$}{argument_description}", grammar));
+        }
+    }
+
+    user_interface.print_help("".to_string());
+    user_interface.print_help("options:".to_string());
+    user_interface.print_help(format!(
+        " {:column_width$}  Show this help message and exit.",
+        help_flags
+    ));
+
+    for (name, short, _, description) in &options {
+        let grammar = grammars
+            .remove(name)
+            .expect("internal error - must have been set");
+        let option_flags = match short {
+            Some(s) => format!("-{s}, --{name}{grammar}"),
+            None => format!("--{name}{grammar}"),
+        };
+        let option_description = match description {
+            Some(message) => format!("  {message}"),
+            None => "".to_string(),
+        };
+        user_interface.print_help(format!(
+            " {:column_width$}{option_description}",
+            option_flags
+        ));
+    }
 }
 
 impl<'ap> Parser<'ap> {
@@ -426,7 +509,7 @@ mod tests {
         let ap = ArgumentParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
         ap.add(Parameter::option(
-            Collection::new(&mut variable),
+            Collection::new(&mut variable, Nargs::Any),
             "variable",
             Some('v'),
         ))
@@ -457,7 +540,7 @@ mod tests {
         let ap = ArgumentParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
         ap.add(Parameter::argument(
-            Collection::new(&mut variable),
+            Collection::new(&mut variable, Nargs::Any),
             "variable",
         ))
         .build()
