@@ -104,7 +104,7 @@ pub(super) enum CloseError {
     },
 }
 
-type OffsetValue = (usize, String);
+pub(crate) type OffsetValue = (usize, String);
 
 #[derive(Debug)]
 pub(super) struct MatchBuffer {
@@ -131,6 +131,14 @@ impl MatchBuffer {
             Bound::Range(_, n) => self.values.len() < n as usize,
             Bound::Lower(_) => true,
         }
+    }
+
+    pub(super) fn can_close(&self) -> bool {
+        let n = match self.bound {
+            Bound::Range(n, _) => n,
+            Bound::Lower(n) => n,
+        };
+        self.values.len() >= n as usize
     }
 
     pub(super) fn close(self) -> Result<MatchTokens, CloseError> {
@@ -245,6 +253,7 @@ mod tests {
         assert_eq!(pb.is_open(), remains_open);
 
         if expected_ok {
+            assert!(pb.can_close());
             assert_eq!(
                 pb.close().unwrap(),
                 MatchTokens {
@@ -253,6 +262,7 @@ mod tests {
                 }
             );
         } else {
+            assert!(!pb.can_close());
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooFewValues {
@@ -288,6 +298,8 @@ mod tests {
         for (offset, token) in &tokens {
             pb.push(*offset, token.clone());
         }
+
+        assert!(pb.can_close());
 
         if expected_ok {
             assert_eq!(pb.is_open(), remains_open);

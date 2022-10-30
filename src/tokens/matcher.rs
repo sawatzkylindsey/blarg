@@ -237,6 +237,34 @@ impl TokenMatcher {
         Ok(())
     }
 
+    pub(crate) fn can_close(&self) -> bool {
+        if let Some(match_buffer) = &self.buffer {
+            if !match_buffer.can_close() {
+                return false;
+            }
+        }
+
+        for argument_config in &self.arguments {
+            let match_buffer = MatchBuffer::new(argument_config.name(), argument_config.bound());
+            if !match_buffer.can_close() {
+                return false;
+            }
+        }
+
+        true
+
+        /*if self.arguments.is_empty() {
+            println!("args empty");
+                println!("buffer check..");
+            } else {
+                println!("no buffer check");
+                true
+            }
+        } else {
+            false
+        }*/
+    }
+
     pub(crate) fn close(mut self) -> Result<Matches, (usize, MatchError, Matches)> {
         let mut close_error: Option<CloseError> = None;
 
@@ -677,6 +705,33 @@ mod tests {
     }
 
     #[rstest]
+    #[case(Bound::Lower(0), 0, true)]
+    #[case(Bound::Lower(0), 1, true)]
+    #[case(Bound::Lower(1), 0, false)]
+    #[case(Bound::Lower(1), 1, true)]
+    #[case(Bound::Range(0, 1), 0, true)]
+    #[case(Bound::Range(0, 1), 1, true)]
+    #[case(Bound::Range(1, 1), 0, false)]
+    #[case(Bound::Range(1, 1), 1, true)]
+    fn option_can_close(#[case] bound: Bound, #[case] feed: u8, #[case] can_close: bool) {
+        // Setup
+        let options = HashSet::from([OptionConfig::new("initial".to_string(), None, bound)]);
+        let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
+        // At first, it can always close - the token matcher only takes in options.
+        assert!(tp.can_close());
+        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+
+        // Execute
+        tp.feed("--initial").unwrap();
+        for token in &tokens {
+            tp.feed(token).unwrap();
+        }
+
+        // Verify
+        assert_eq!(tp.can_close(), can_close);
+    }
+
+    #[rstest]
     #[case(Bound::Range(0, 0), 0, true)]
     #[case(Bound::Range(0, 0), 1, false)]
     #[case(Bound::Range(0, 1), 0, true)]
@@ -859,6 +914,30 @@ mod tests {
                 values: vec![(0, "value1".to_string()), (6, "value2".to_string())],
             }]
         );
+    }
+
+    #[rstest]
+    #[case(Bound::Lower(0), 0, true)]
+    #[case(Bound::Lower(0), 1, true)]
+    #[case(Bound::Lower(1), 0, false)]
+    #[case(Bound::Lower(1), 1, true)]
+    #[case(Bound::Range(0, 1), 0, true)]
+    #[case(Bound::Range(0, 1), 1, true)]
+    #[case(Bound::Range(1, 1), 0, false)]
+    #[case(Bound::Range(1, 1), 1, true)]
+    fn argument_can_close(#[case] bound: Bound, #[case] feed: u8, #[case] can_close: bool) {
+        // Setup
+        let arguments = VecDeque::from([ArgumentConfig::new("item".to_string(), bound)]);
+        let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
+        let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
+
+        // Execute
+        for token in &tokens {
+            tp.feed(token).unwrap();
+        }
+
+        // Verify
+        assert_eq!(tp.can_close(), can_close);
     }
 
     #[rstest]
