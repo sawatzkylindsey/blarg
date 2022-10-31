@@ -1,7 +1,7 @@
 use crate::parser::ParseError;
 
 pub(crate) trait UserInterface {
-    fn print_help(&self, message: String);
+    fn print(&self, message: String);
     fn print_error(&self, error: ParseError);
     fn print_context(&self, tokens: &[&str], offset: usize);
 }
@@ -15,7 +15,7 @@ impl Default for Console {
 }
 
 impl UserInterface for Console {
-    fn print_help(&self, message: String) {
+    fn print(&self, message: String) {
         println!("{message}");
     }
 

@@ -1,14 +1,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::convert::TryFrom;
 use std::env;
-use std::hash::Hash;
 use std::marker::PhantomData;
+use std::rc::Rc;
 use thiserror::Error;
 
 use crate::field::*;
 use crate::tokens::*;
 use crate::ui::*;
-
-//pub trait Branchable: PartialEq + Eq + Hash {}
 
 #[derive(Debug, Error)]
 #[error("Config error: {0}")]
@@ -57,12 +56,12 @@ pub enum Parameter<'ap, T> {
     },
 }
 
-pub struct BranchCondition<'ap, T> {
+pub struct Condition<'ap, T> {
     arg_parameter: Parameter<'ap, T>,
 }
 
-impl<'ap, T: std::str::FromStr> BranchCondition<'ap, T> {
-    pub fn new(value: Value<'ap, T>, name: &'static str) -> Self {
+impl<'ap, T: std::str::FromStr> Condition<'ap, T> {
+    pub fn new(value: Scalar<'ap, T>, name: &'static str) -> Self {
         Self {
             arg_parameter: Parameter::argument(value, name),
         }
@@ -79,13 +78,13 @@ impl<'ap, T: std::str::FromStr> BranchCondition<'ap, T> {
 
 impl<'ap, T> Parameter<'ap, T> {
     pub fn option(
-        generic_capturable: impl GenericCapturable<'ap, T> + CliOption + 'ap,
+        capturable: impl GenericCapturable<'ap, T> + CliOption + 'ap,
         name: &'static str,
         short: Option<char>,
     ) -> Self {
-        let nargs = generic_capturable.nargs();
+        let nargs = capturable.nargs();
         Parameter::Opt {
-            field: Field::binding(generic_capturable),
+            field: Field::binding(capturable),
             nargs,
             name,
             short,
@@ -94,12 +93,12 @@ impl<'ap, T> Parameter<'ap, T> {
     }
 
     pub fn argument(
-        generic_capturable: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
+        capturable: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
         name: &'static str,
     ) -> Self {
-        let nargs = generic_capturable.nargs();
+        let nargs = capturable.nargs();
         Parameter::Arg {
-            field: Field::binding(generic_capturable),
+            field: Field::binding(capturable),
             nargs,
             name,
             description: None,
@@ -133,67 +132,27 @@ impl<'ap, T> Parameter<'ap, T> {
     }
 }
 
-/*struct Branch<'ap, T> {
-    branch: Parameter<'ap, T>,
-}
-
-impl<'ap, B> Branch<'ap, B> {
-    pub fn condition(
-        generic_capturable: Value<'ap, T>
-        name: &'static str,
-    ) -> Self {
-        let nargs = generic_capturable.nargs();
-        Self {
-            branch:
-        Parameter::Arg {
-            field: Field::binding(generic_capturable),
-            nargs,
-            name,
-            description: None,
-        }
-        }
-    }*/
-
-/*pub fn help(self, message: &'static str) -> Self {
-
-        Parameter::Arg {
-            field, nargs, name, ..
-        } => Parameter::Arg {
-            field,
-            nargs,
-            name,
-            description: Some(message),
-        },
-    }
-}*/
-
 type OptionParameter = (String, Option<char>, Nargs, Option<&'static str>);
 type ArgumentParameter = (String, Nargs, Option<&'static str>);
 
-pub struct ArgumentParser<'ap> {
-    program: &'ap str,
+pub struct CommandParser<'ap> {
+    program: String,
     option_parameters: Vec<OptionParameter>,
     argument_parameters: Vec<ArgumentParameter>,
     option_captures: Vec<OptionCapture<'ap>>,
     argument_captures: Vec<ArgumentCapture<'ap>>,
+    discriminator: Option<String>,
 }
 
-/*impl<'ap> std::fmt::Debug for ArgumentParser<'ap> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ArgumentParser")
-            .field("program", &self.program)
-            .finish()
-    }
-}*/
-
-impl<'ap> ArgumentParser<'ap> {
-    pub fn new(program: &'ap str) -> Self {
+impl<'ap> CommandParser<'ap> {
+    pub fn new(program: impl Into<String>) -> Self {
         Self {
-            program,
+            program: program.into(),
             option_parameters: Vec::default(),
             argument_parameters: Vec::default(),
             option_captures: Vec::default(),
             argument_captures: Vec::default(),
+            discriminator: None,
         }
     }
 
@@ -231,103 +190,88 @@ impl<'ap> ArgumentParser<'ap> {
     }
 
     pub fn branch<T: std::str::FromStr + std::fmt::Display>(
-        self,
-        condition: BranchCondition<'ap, T>,
-    ) -> BranchingArgumentParser<'ap, T> {
-        let discriminator = condition.name();
-        BranchingArgumentParser::new(self.add(condition.arg_parameter), discriminator)
+        mut self,
+        condition: Condition<'ap, T>,
+    ) -> SubCommandParser<'ap, T> {
+        if self.discriminator.replace(condition.name()).is_some() {
+            panic!("internal error - cannot setup multiple discriminators");
+        }
+
+        SubCommandParser::new(self.add(condition.arg_parameter))
     }
 
-    pub fn build(self) -> Result<Parser<'ap>, ConfigError> {
-        Ok(Parser {
-            program: self.program,
-            thing: Thing {
-                options: self.option_parameters,
-                arguments: self.argument_parameters,
-                parse_capture: ParseCapture::new(
-                    self.option_captures,
-                    self.argument_captures,
-                    None,
-                )?,
-            },
-            user_interface: Box::new(Console::default()),
+    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+        Ok(GeneralParser {
+            program: self.program.clone(),
+            command: ParseUnit::try_from(self)?,
+            sub_commands: HashMap::default(),
+            user_interface: Rc::new(Console::default()),
         })
     }
 }
 
-pub struct BranchingArgumentParser<'ap, B: std::fmt::Display> {
-    root: ArgumentParser<'ap>,
-    discriminator: String,
-    branches: HashMap<String, ArgumentParser<'ap>>,
+pub struct SubCommandParser<'ap, B: std::fmt::Display> {
+    root: CommandParser<'ap>,
+    commands: HashMap<String, CommandParser<'ap>>,
     _phantom: PhantomData<B>,
 }
 
-impl<'ap, B: std::fmt::Display> BranchingArgumentParser<'ap, B> {
-    pub fn new(root: ArgumentParser<'ap>, discriminator: String) -> Self {
+impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
+    pub fn new(root: CommandParser<'ap>) -> Self {
         Self {
             root,
-            discriminator,
-            branches: HashMap::default(),
+            commands: HashMap::default(),
             _phantom: PhantomData,
         }
     }
 
-    pub fn add<T>(mut self, branch: B, parameter: Parameter<'ap, T>) -> Self {
-        let branch = branch.to_string();
-        let ap = self
-            .branches
-            .remove(&branch)
-            .unwrap_or_else(|| ArgumentParser::new("moot"));
-        self.branches.insert(branch, ap.add(parameter));
+    pub fn add<T>(mut self, sub_command: B, parameter: Parameter<'ap, T>) -> Self {
+        let command_str = sub_command.to_string();
+        let cp = self
+            .commands
+            .remove(&command_str)
+            .unwrap_or_else(|| CommandParser::new(command_str.clone()));
+        self.commands.insert(command_str, cp.add(parameter));
         self
     }
 
-    pub fn build(self) -> Result<BranchingParser<'ap>, ConfigError> {
-        let mut branches = HashMap::default();
+    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+        let mut sub_commands = HashMap::default();
 
-        for (branch, ap) in self.branches.into_iter() {
-            branches.insert(
-                branch,
-                Thing {
-                    options: ap.option_parameters,
-                    arguments: ap.argument_parameters,
-                    parse_capture: ParseCapture::new(
-                        ap.option_captures,
-                        ap.argument_captures,
-                        None,
-                    )?,
-                },
-            );
+        for (command, cp) in self.commands.into_iter() {
+            sub_commands.insert(command, ParseUnit::try_from(cp)?);
         }
 
-        Ok(BranchingParser {
-            program: self.root.program,
-            root: Thing {
-                options: self.root.option_parameters,
-                arguments: self.root.argument_parameters,
-                parse_capture: ParseCapture::new(
-                    self.root.option_captures,
-                    self.root.argument_captures,
-                    Some(self.discriminator),
-                )?,
-            },
-            branches,
-            user_interface: Box::new(Console::default()),
+        Ok(GeneralParser {
+            program: self.root.program.clone(),
+            command: ParseUnit::try_from(self.root)?,
+            sub_commands,
+            user_interface: Rc::new(Console::default()),
         })
     }
 }
 
-pub struct Parser<'ap> {
-    program: &'ap str,
-    thing: Thing<'ap>,
-    user_interface: Box<dyn UserInterface>,
+impl<'ap> TryFrom<CommandParser<'ap>> for ParseUnit<'ap> {
+    type Error = ConfigError;
+
+    fn try_from(value: CommandParser<'ap>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            options: value.option_parameters,
+            arguments: value.argument_parameters,
+            parser: Parser::new(
+                value.option_captures,
+                value.argument_captures,
+                value.discriminator,
+            )?,
+        })
+    }
 }
 
 fn print_help(
     program: String,
     mut options: Vec<OptionParameter>,
     arguments: Vec<ArgumentParameter>,
-    user_interface: Box<dyn UserInterface>,
+    user_interface: Rc<dyn UserInterface>,
 ) {
     options.sort_by(|a, b| a.0.cmp(&b.0));
     let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
@@ -388,11 +332,11 @@ fn print_help(
         summary.push(format!("{grammar}"));
     }
 
-    user_interface.print_help(format!("usage: {program} {}", summary.join(" ")));
+    user_interface.print(format!("usage: {program} {}", summary.join(" ")));
 
     if !arguments.is_empty() {
-        user_interface.print_help("".to_string());
-        user_interface.print_help("positional arguments:".to_string());
+        user_interface.print("".to_string());
+        user_interface.print("positional arguments:".to_string());
 
         for (name, _, description) in &arguments {
             let grammar = grammars
@@ -402,13 +346,13 @@ fn print_help(
                 Some(message) => format!("  {message}"),
                 None => "".to_string(),
             };
-            user_interface.print_help(format!(" {:column_width$}{argument_description}", grammar));
+            user_interface.print(format!(" {:column_width$}{argument_description}", grammar));
         }
     }
 
-    user_interface.print_help("".to_string());
-    user_interface.print_help("options:".to_string());
-    user_interface.print_help(format!(
+    user_interface.print("".to_string());
+    user_interface.print("options:".to_string());
+    user_interface.print(format!(
         " {:column_width$}  Show this help message and exit.",
         help_flags
     ));
@@ -425,139 +369,125 @@ fn print_help(
             Some(message) => format!("  {message}"),
             None => "".to_string(),
         };
-        user_interface.print_help(format!(
+        user_interface.print(format!(
             " {:column_width$}{option_description}",
             option_flags
         ));
     }
 }
 
-impl<'ap> Parser<'ap> {
-    fn parse_tokens(self, tokens: &[&str]) -> Result<(), i32> {
-        match self.thing.parse_capture.consume(tokens, false) {
-            Ok(Action::RunProgram(..)) => Ok(()),
+pub struct GeneralParser<'ap> {
+    program: String,
+    command: ParseUnit<'ap>,
+    sub_commands: HashMap<String, ParseUnit<'ap>>,
+    user_interface: Rc<dyn UserInterface>,
+}
+
+struct ParseUnit<'ap> {
+    options: Vec<OptionParameter>,
+    arguments: Vec<ArgumentParameter>,
+    parser: Parser<'ap>,
+}
+
+impl<'ap> ParseUnit<'ap> {
+    fn invoke(
+        self,
+        tokens: &[&str],
+        program: String,
+        user_interface: Rc<dyn UserInterface>,
+    ) -> ParseResult {
+        match self.parser.consume(tokens) {
+            Ok(Action::Continue {
+                discriminee,
+                remaining,
+            }) => match discriminee {
+                Some((offset, variant)) => ParseResult::Incomplete {
+                    variant_offset: offset,
+                    variant,
+                    remaining,
+                },
+                None => ParseResult::Complete,
+            },
             Ok(Action::PrintHelp) => {
-                print_help(
-                    self.program.to_string(),
-                    self.thing.options,
-                    self.thing.arguments,
-                    self.user_interface,
-                );
-                Err(0)
+                print_help(program, self.options, self.arguments, user_interface);
+                ParseResult::Exit(0)
             }
             Err((offset, parse_error)) => {
-                self.user_interface.print_error(parse_error);
-                self.user_interface.print_context(tokens, offset);
-                Err(1)
+                user_interface.print_error(parse_error);
+                user_interface.print_context(tokens, offset);
+                ParseResult::Exit(1)
             }
         }
     }
+}
 
-    pub fn parse(self) {
-        let command_input: Vec<String> = env::args().skip(1).collect();
-        let result = self.parse_tokens(
-            command_input
-                .iter()
-                .map(AsRef::as_ref)
-                .collect::<Vec<&str>>()
-                .as_slice(),
+enum ParseResult {
+    Complete,
+    Incomplete {
+        variant_offset: usize,
+        variant: String,
+        remaining: Vec<String>,
+    },
+    Exit(i32),
+}
+
+impl<'ap> GeneralParser<'ap> {
+    fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
+        let command_result = self.command.invoke(
+            tokens,
+            self.program.clone(),
+            Rc::clone(&self.user_interface),
         );
 
-        match result {
-            Ok(()) => {}
-            Err(exit_code) => {
-                std::process::exit(exit_code);
-            }
-        };
-    }
-}
-
-pub struct BranchingParser<'ap> {
-    program: &'ap str,
-    root: Thing<'ap>,
-    branches: HashMap<String, Thing<'ap>>,
-    user_interface: Box<dyn UserInterface>,
-}
-
-struct Thing<'ap> {
-    options: Vec<OptionParameter>,
-    arguments: Vec<ArgumentParameter>,
-    parse_capture: ParseCapture<'ap>,
-}
-
-impl<'ap> BranchingParser<'ap> {
-    fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
-        match self.root.parse_capture.consume(tokens, true) {
-            Ok(Action::RunProgram(fed, discriminee, remaining_tokens)) => match discriminee {
-                Some((offset, value)) => match self.branches.remove(&value) {
-                    Some(ap) => {
-                        match ap.parse_capture.consume(
-                            remaining_tokens
+        match command_result {
+            ParseResult::Complete => Ok(()),
+            ParseResult::Incomplete {
+                variant_offset,
+                variant,
+                remaining,
+            } => {
+                match self.sub_commands.remove(&variant) {
+                    Some(sub_command) => {
+                        match sub_command.invoke(
+                            remaining
                                 .iter()
                                 .map(AsRef::as_ref)
                                 .collect::<Vec<&str>>()
                                 .as_slice(),
-                            false,
+                            format!("{program} {variant}", program = self.program),
+                            Rc::clone(&self.user_interface),
                         ) {
-                            Ok(Action::RunProgram(..)) => Ok(()),
-                            Ok(Action::PrintHelp) => {
-                                print_help(
-                                    format!("{p} {value}", p = self.program),
-                                    ap.options,
-                                    ap.arguments,
-                                    self.user_interface,
-                                );
-                                Err(0)
+                            ParseResult::Complete => Ok(()),
+                            ParseResult::Incomplete { .. } => {
+                                panic!("internal error - sub-command parse must complete/exit.")
                             }
-                            Err((offset, parse_error)) => {
-                                self.user_interface.print_error(parse_error);
-                                self.user_interface.print_context(tokens, offset + fed);
-                                Err(1)
-                            }
+                            ParseResult::Exit(code) => Err(code),
                         }
                     }
                     None => {
-                        // The sub-command isn't amongst the branches.
-                        // Either the user specified an invalid sub-command, OR
-                        // the program invalidates the 'Display' inverse-to 'FromStr', 'FromStr' inverse-to 'Display' requirement.
+                        // The varaint isn't amongst the sub-commands.
+                        // Either the user specified an invalid variant, OR
+                        // the program invalidates the 'Display' inverse-to 'FromStr' / 'FromStr' inverse-to 'Display' requirement.
                         self.user_interface
-                            .print_error(ParseError(format!("Unknown sub-command '{value}'.")));
-                        self.user_interface.print_context(tokens, offset);
+                            .print_error(ParseError(format!("Unknown sub-command '{variant}'.")));
+                        self.user_interface.print_context(tokens, variant_offset);
                         Err(1)
                     }
-                },
-                None => {
-                    panic!("internal error - un-matched discriminator");
                 }
-            },
-            Ok(Action::PrintHelp) => {
-                print_help(
-                    self.program.to_string(),
-                    self.root.options,
-                    self.root.arguments,
-                    self.user_interface,
-                );
-                Err(0)
             }
-            Err((offset, parse_error)) => {
-                self.user_interface.print_error(parse_error);
-                self.user_interface.print_context(tokens, offset);
-                Err(1)
-            }
+            ParseResult::Exit(code) => Err(code),
         }
     }
 
     pub fn parse(self) {
         let command_input: Vec<String> = env::args().skip(1).collect();
-        let result = self.parse_tokens(
+        match self.parse_tokens(
             command_input
                 .iter()
                 .map(AsRef::as_ref)
                 .collect::<Vec<&str>>()
                 .as_slice(),
-        );
-
-        match result {
+        ) {
             Ok(()) => {}
             Err(exit_code) => {
                 std::process::exit(exit_code);
@@ -567,11 +497,14 @@ impl<'ap> BranchingParser<'ap> {
 }
 
 enum Action {
-    RunProgram(usize, Option<OffsetValue>, Vec<String>),
+    Continue {
+        discriminee: Option<OffsetValue>,
+        remaining: Vec<String>,
+    },
     PrintHelp,
 }
 
-struct ParseCapture<'ap> {
+struct Parser<'ap> {
     token_matcher: TokenMatcher,
     captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>>,
     discriminator: Option<String>,
@@ -584,7 +517,7 @@ type ArgumentCapture<'ap> = (ArgumentConfig, Box<(dyn AnonymousCapturable + 'ap)
 const HELP_NAME: &'static str = "help";
 const HELP_SHORT: char = 'h';
 
-impl<'ap> ParseCapture<'ap> {
+impl<'ap> Parser<'ap> {
     fn new(
         options: Vec<OptionCapture<'ap>>,
         arguments: Vec<ArgumentCapture<'ap>>,
@@ -628,12 +561,9 @@ impl<'ap> ParseCapture<'ap> {
         })
     }
 
-    fn consume(
-        mut self,
-        tokens: &[&str],
-        minimal_feed: bool,
-    ) -> Result<Action, (usize, ParseError)> {
+    fn consume(mut self, tokens: &[&str]) -> Result<Action, (usize, ParseError)> {
         let mut token_iter = tokens.iter();
+        let minimal_consume = self.discriminator.is_some();
         // 1. Feed the raw token strings to the matcher.
         let mut fed = 0;
 
@@ -646,7 +576,7 @@ impl<'ap> ParseCapture<'ap> {
                         .map_err(|e| (fed, ParseError::from(e)))?;
                     fed += token_length;
 
-                    if minimal_feed && self.token_matcher.can_close() {
+                    if minimal_consume && self.token_matcher.can_close() {
                         break;
                     }
                 }
@@ -685,8 +615,8 @@ impl<'ap> ParseCapture<'ap> {
             if let Some(ref target) = self.discriminator {
                 if target == &match_tokens.name {
                     match &match_tokens.values[..] {
-                        [offset_value] => {
-                            if discriminee.replace(offset_value.clone()).is_some() {
+                        [(offset, value)] => {
+                            if discriminee.replace((*offset, value.clone())).is_some() {
                                 panic!(
                                     "internal error - discriminator cannot have multiple matches"
                                 );
@@ -702,11 +632,10 @@ impl<'ap> ParseCapture<'ap> {
             }
         }
 
-        Ok(Action::RunProgram(
-            fed,
+        Ok(Action::Continue {
             discriminee,
-            token_iter.map(|s| s.to_string()).collect(),
-        ))
+            remaining: token_iter.map(|s| s.to_string()).collect(),
+        })
     }
 }
 
@@ -717,7 +646,7 @@ mod tests {
 
     #[test]
     fn ap_empty() {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         ap.build().unwrap().parse_tokens(empty::slice()).unwrap();
     }
 
@@ -729,10 +658,10 @@ mod tests {
     #[case(vec!["-v=1"])]
     #[case(vec!["-v=01"])]
     fn ap_option_value(#[case] tokens: Vec<&str>) {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: u32 = 0;
         ap.add(Parameter::option(
-            Value::new(&mut variable),
+            Scalar::new(&mut variable),
             "variable",
             Some('v'),
         ))
@@ -747,7 +676,7 @@ mod tests {
     #[case(vec!["--variable"])]
     #[case(vec!["-v"])]
     fn ap_option_switch(#[case] tokens: Vec<&str>) {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: u32 = 0;
         ap.add(Parameter::option(
             Switch::new(&mut variable, 2),
@@ -771,7 +700,7 @@ mod tests {
     #[case(vec!["-v=1"], vec![1])]
     #[case(vec!["-v=01"], vec![1])]
     fn ap_option_container(#[case] tokens: Vec<&str>, #[case] expected: Vec<u32>) {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
         ap.add(Parameter::option(
             Collection::new(&mut variable, Nargs::Any),
@@ -787,9 +716,9 @@ mod tests {
 
     #[test]
     fn ap_argument_value() {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: u32 = 0;
-        ap.add(Parameter::argument(Value::new(&mut variable), "variable"))
+        ap.add(Parameter::argument(Scalar::new(&mut variable), "variable"))
             .build()
             .unwrap()
             .parse_tokens(vec!["1"].as_slice())
@@ -802,7 +731,7 @@ mod tests {
     #[case(vec!["1", "3", "2", "1"], vec![1, 3, 2, 1])]
     #[case(vec!["01"], vec![1])]
     fn ap_argument_container(#[case] tokens: Vec<&str>, #[case] expected: Vec<u32>) {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: Vec<u32> = Vec::default();
         ap.add(Parameter::argument(
             Collection::new(&mut variable, Nargs::Any),
@@ -823,10 +752,10 @@ mod tests {
     #[case(vec!["--help", "not-a-u32"])]
     #[case(vec!["-h", "not-a-u32"])]
     fn ap_help(#[case] tokens: Vec<&str>) {
-        let ap = ArgumentParser::new("abc");
+        let ap = CommandParser::new("abc");
         let mut variable: u32 = 0;
         let exit_code = ap
-            .add(Parameter::argument(Value::new(&mut variable), "variable"))
+            .add(Parameter::argument(Scalar::new(&mut variable), "variable"))
             .build()
             .unwrap()
             .parse_tokens(tokens.as_slice())
@@ -834,4 +763,6 @@ mod tests {
         assert_eq!(exit_code, 0);
         assert_eq!(variable, 0);
     }
+
+    //fn make_input(tokens: Vec<&str>) -> Vec<String> {
 }

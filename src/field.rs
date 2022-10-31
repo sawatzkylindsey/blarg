@@ -59,14 +59,14 @@ pub(crate) trait AnonymousCapturable {
 }
 
 /// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
-pub struct Value<'ap, T> {
+pub struct Scalar<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
 }
 
-impl<'ap, T> CliOption for Value<'ap, T> {}
-impl<'ap, T> CliArgument for Value<'ap, T> {}
+impl<'ap, T> CliOption for Scalar<'ap, T> {}
+impl<'ap, T> CliArgument for Scalar<'ap, T> {}
 
-impl<'ap, T> Value<'ap, T> {
+impl<'ap, T> Scalar<'ap, T> {
     pub fn new(variable: &'ap mut T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -74,7 +74,7 @@ impl<'ap, T> Value<'ap, T> {
     }
 }
 
-impl<'ap, T> GenericCapturable<'ap, T> for Value<'ap, T>
+impl<'ap, T> GenericCapturable<'ap, T> for Scalar<'ap, T>
 where
     T: FromStr,
 {
@@ -265,13 +265,13 @@ mod tests {
     fn value_capture() {
         // Integer
         let mut variable: u32 = u32::default();
-        let mut value = Value::new(&mut variable);
+        let mut value = Scalar::new(&mut variable);
         value.capture("5").unwrap();
         assert_eq!(variable, 5);
 
         // Boolean
         let mut variable: bool = false;
-        let mut value = Value::new(&mut variable);
+        let mut value = Scalar::new(&mut variable);
         value.capture("true").unwrap();
         assert!(variable);
     }
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn value_overwritten() {
         let mut variable: u32 = u32::default();
-        let mut value = Value::new(&mut variable);
+        let mut value = Scalar::new(&mut variable);
         value.capture("5").unwrap();
         variable = 2;
         assert_eq!(variable, 2);
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn value_matched() {
         let mut variable: u32 = u32::default();
-        let mut value = Value::new(&mut variable);
+        let mut value = Scalar::new(&mut variable);
         value.matched();
         assert_eq!(variable, 0);
     }
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn test_nargs() {
         let mut variable: u32 = u32::default();
-        let value = Value::new(&mut variable);
+        let value = Scalar::new(&mut variable);
         assert_eq!(value.nargs(), Nargs::Precisely(1));
 
         let mut variable: u32 = u32::default();

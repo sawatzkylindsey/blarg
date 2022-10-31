@@ -1,5 +1,5 @@
-use blarg::field::{Collection, Nargs, Optional, Switch, Value};
-use blarg::parser::{ArgumentParser, Parameter};
+use blarg::field::{Collection, Nargs, Optional, Scalar, Switch};
+use blarg::parser::{CommandParser, Parameter};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
@@ -47,14 +47,14 @@ fn main() {
     let mut countries: HashSet<Country> = HashSet::default();
     let mut items: Vec<u32> = Vec::default();
 
-    let ap = ArgumentParser::new("reducer");
+    let ap = CommandParser::new("reducer");
     let parser = ap
         .add(
             Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))
                 .help("Do dee doo."),
         )
         .add(Parameter::option(
-            Value::new(&mut operand),
+            Scalar::new(&mut operand),
             "operand",
             Some('o'),
         ))
