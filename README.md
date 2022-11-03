@@ -49,27 +49,36 @@ For example, the `blarg` Api does not allow for a required parameter to be speci
 
 **Argument**
 ```
-Field               | Narg     | Grammar        | Description
---------------------------------------------------------------------------------
-Value<T>            | \        | VALUE          | precisely 1
-Container<Option<T> | \        | \              | invalid; use Parameter::option
-Container<C<T>>     | n; n > 0 | VALUE .. VALUE | precisely n
-Container<C<T>>     | *        | [VALUE ...]    | any amount; captured greedily
-Container<C<T>>     | +        | VALUE [...]    | at least 1; captured greedily
-Switch<T>           | \        | \              | invalid; use Parameter::option
+Parameter         | Narg | Grammar         | Description
+---------------------------------------------------------------------------
+Scalar<T>         | \    | VALUE           | precisely 1
+Optional<T>       | \    | \               | invalid; use Parameter::option
+Collection<C<T>>  | n    | VALUE .. VALUE  | precisely n
+Collection<C<T>>  | *    | [VALUE ...]     | any amount; captured greedily
+Collection<C<T>>  | +    | VALUE [...]     | at least 1; captured greedily
+Switch<T>         | \    | \               | invalid; use Parameter::option
 ```
+
+1. The CLI inputs are matched to arguments based off positional ordering.
+Once the precise number of inputs are matched, then the input naturally switches to the next argument.
+For example, `1 2 3` will match `1 2` into an n=2 argument, and `3` into the next argument.
+2. The nargs `*` and `+` match greedily; they never switch over to the next argument.
+This greedy matching can be broken by using an option as a separator (that said, `blarg` does not recommend a CLI design more than one `*` or `+` argument).
+For example, `1 2 3 --key 123 4 5 6` will match `1 2 3` into the first `*` or `+` argument, and `4 5 6` into the second.
+
 
 **Option**
 ```
-Field               | Narg     | Grammar                 | Description
-----------------------------------------------------------------------------------------
-Value<T>            | \        | [--NAME VALUE]          | precisely 1
-Container<Option<T> | \        | [--NAME VALUE]          | precisely 1
-Container<C<T>>     | n; n > 0 | [--NAME VALUE .. VALUE] | precisely n
-Container<C<T>>     | +        | [--NAME VALUE [...]]    | at least 1; captured greedily
-Switch<T>           | \        | [--NAME]                | precisely 0
+Parameter         | Narg | Grammar                  | Description
+-----------------------------------------------------------------------------------
+Scalar<T>         | \    | [--NAME VALUE]           | precisely 1
+Optional<T>       | \    | [--NAME VALUE]           | precisely 1
+Collection<C<T>>  | n    | [--NAME VALUE .. VALUE]  | precisely n
+Collection<C<T>>  | *    | [--NAME VALUE ...]       | any amount; captured greedily
+Collection<C<T>>  | +    | [--NAME VALUE [...]]     | at least 1; captured greedily
+Switch<T>         | \    | [--NAME]                 | precisely 0
 ```
-There are two addition rules the grammar of **options**.
+There are two addition rules for the grammar of **options**.
 
 1. The key-value pair may be separated with the `=` character.
 In this case, only 1 value is passed to the option; subsequent tokens always apply to the next parameter.

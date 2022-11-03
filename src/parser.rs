@@ -40,7 +40,7 @@ impl From<InvalidConversion> for ParseError {
     }
 }
 
-pub enum Parameter<'ap, T> {
+enum ParameterInner<'ap, T> {
     Opt {
         field: Field<'ap, T>,
         nargs: Nargs,
@@ -68,13 +68,15 @@ impl<'ap, T: std::str::FromStr> Condition<'ap, T> {
     }
 
     fn name(&self) -> String {
-        if let Parameter::Arg { name, .. } = self.arg_parameter {
+        if let ParameterInner::Arg { name, .. } = self.arg_parameter.0 {
             name.to_string()
         } else {
-            panic!("internal error - argument must always be Parameter::Arg");
+            panic!("internal error - argument must always be ParameterInner::Arg");
         }
     }
 }
+
+pub struct Parameter<'ap, T>(ParameterInner<'ap, T>);
 
 impl<'ap, T> Parameter<'ap, T> {
     pub fn option(
@@ -83,13 +85,13 @@ impl<'ap, T> Parameter<'ap, T> {
         short: Option<char>,
     ) -> Self {
         let nargs = capturable.nargs();
-        Parameter::Opt {
+        Self(ParameterInner::Opt {
             field: Field::binding(capturable),
             nargs,
             name,
             short,
             description: None,
-        }
+        })
     }
 
     pub fn argument(
@@ -97,37 +99,37 @@ impl<'ap, T> Parameter<'ap, T> {
         name: &'static str,
     ) -> Self {
         let nargs = capturable.nargs();
-        Parameter::Arg {
+        Self(ParameterInner::Arg {
             field: Field::binding(capturable),
             nargs,
             name,
             description: None,
-        }
+        })
     }
 
     pub fn help(self, message: &'static str) -> Self {
-        match self {
-            Parameter::Opt {
+        match self.0 {
+            ParameterInner::Opt {
                 field,
                 nargs,
                 name,
                 short,
                 ..
-            } => Parameter::Opt {
+            } => Self(ParameterInner::Opt {
                 field,
                 nargs,
                 name,
                 short,
                 description: Some(message),
-            },
-            Parameter::Arg {
+            }),
+            ParameterInner::Arg {
                 field, nargs, name, ..
-            } => Parameter::Arg {
+            } => Self(ParameterInner::Arg {
                 field,
                 nargs,
                 name,
                 description: Some(message),
-            },
+            }),
         }
     }
 }
@@ -157,8 +159,8 @@ impl<'ap> CommandParser<'ap> {
     }
 
     pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
-        match parameter {
-            Parameter::Opt {
+        match parameter.0 {
+            ParameterInner::Opt {
                 field,
                 nargs,
                 name,
@@ -172,7 +174,7 @@ impl<'ap> CommandParser<'ap> {
                 self.option_parameters
                     .push((name.to_string(), short, nargs, description));
             }
-            Parameter::Arg {
+            ParameterInner::Arg {
                 field,
                 nargs,
                 name,
