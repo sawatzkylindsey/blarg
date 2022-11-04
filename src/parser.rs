@@ -258,123 +258,13 @@ impl<'ap> TryFrom<CommandParser<'ap>> for ParseUnit<'ap> {
 
     fn try_from(value: CommandParser<'ap>) -> Result<Self, Self::Error> {
         Ok(Self {
-            options: value.option_parameters,
-            arguments: value.argument_parameters,
+            printer: Printer::new(value.option_parameters, value.argument_parameters),
             parser: Parser::new(
                 value.option_captures,
                 value.argument_captures,
                 value.discriminator,
             )?,
         })
-    }
-}
-
-fn print_help(
-    program: String,
-    mut options: Vec<OptionParameter>,
-    arguments: Vec<ArgumentParameter>,
-    user_interface: Rc<dyn UserInterface>,
-) {
-    options.sort_by(|a, b| a.0.cmp(&b.0));
-    let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
-    let mut summary = vec![format!("[-{HELP_SHORT}]")];
-    let mut column_width = help_flags.len();
-    let mut grammars: HashMap<String, String> = HashMap::default();
-
-    for (name, short, nargs, _) in &options {
-        let grammar = match nargs {
-            Nargs::Precisely(0) => "".to_string(),
-            Nargs::Precisely(n) => format!(
-                " {}",
-                (0..*n)
-                    .map(|_| name.to_ascii_uppercase())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            ),
-            Nargs::Any => format!(" [{} ...]", name.to_ascii_uppercase()),
-            Nargs::AtLeastOne => format!(" {} [...]", name.to_ascii_uppercase()),
-        };
-        grammars.insert(name.clone(), grammar.clone());
-        match short {
-            Some(s) => {
-                if column_width < name.len() + grammar.len() + 6 {
-                    column_width = name.len() + grammar.len() + 6;
-                }
-
-                summary.push(format!("[-{s}{grammar}]"));
-            }
-            None => {
-                if column_width < name.len() + grammar.len() + 2 {
-                    column_width = name.len() + grammar.len() + 2;
-                }
-
-                summary.push(format!("[--{name}{grammar}]"));
-            }
-        };
-    }
-
-    for (name, nargs, _) in &arguments {
-        let grammar = match nargs {
-            Nargs::Precisely(n) => format!(
-                "{}",
-                (0..*n)
-                    .map(|_| name.to_ascii_uppercase())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            ),
-            Nargs::Any => format!("[{} ...]", name.to_ascii_uppercase()),
-            Nargs::AtLeastOne => format!("{} [...]", name.to_ascii_uppercase()),
-        };
-        grammars.insert(name.clone(), grammar.clone());
-
-        if column_width < grammar.len() {
-            column_width = grammar.len();
-        }
-
-        summary.push(format!("{grammar}"));
-    }
-
-    user_interface.print(format!("usage: {program} {}", summary.join(" ")));
-
-    if !arguments.is_empty() {
-        user_interface.print("".to_string());
-        user_interface.print("positional arguments:".to_string());
-
-        for (name, _, description) in &arguments {
-            let grammar = grammars
-                .remove(name)
-                .expect("internal error - must have been set");
-            let argument_description = match description {
-                Some(message) => format!("  {message}"),
-                None => "".to_string(),
-            };
-            user_interface.print(format!(" {:column_width$}{argument_description}", grammar));
-        }
-    }
-
-    user_interface.print("".to_string());
-    user_interface.print("options:".to_string());
-    user_interface.print(format!(
-        " {:column_width$}  Show this help message and exit.",
-        help_flags
-    ));
-
-    for (name, short, _, description) in &options {
-        let grammar = grammars
-            .remove(name)
-            .expect("internal error - must have been set");
-        let option_flags = match short {
-            Some(s) => format!("-{s}, --{name}{grammar}"),
-            None => format!("--{name}{grammar}"),
-        };
-        let option_description = match description {
-            Some(message) => format!("  {message}"),
-            None => "".to_string(),
-        };
-        user_interface.print(format!(
-            " {:column_width$}{option_description}",
-            option_flags
-        ));
     }
 }
 
@@ -385,9 +275,123 @@ pub struct GeneralParser<'ap> {
     user_interface: Rc<dyn UserInterface>,
 }
 
-struct ParseUnit<'ap> {
+struct Printer {
     options: Vec<OptionParameter>,
     arguments: Vec<ArgumentParameter>,
+}
+
+impl Printer {
+    fn new(mut options: Vec<OptionParameter>, arguments: Vec<ArgumentParameter>) -> Self {
+        options.sort_by(|a, b| a.0.cmp(&b.0));
+        Self { options, arguments }
+    }
+
+    fn print_help(&self, program: String, user_interface: Rc<dyn UserInterface>) {
+        let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
+        let mut summary = vec![format!("[-{HELP_SHORT}]")];
+        let mut column_width = help_flags.len();
+        let mut grammars: HashMap<String, String> = HashMap::default();
+
+        for (name, short, nargs, _) in &self.options {
+            let grammar = match nargs {
+                Nargs::Precisely(0) => "".to_string(),
+                Nargs::Precisely(n) => format!(
+                    " {}",
+                    (0..*n)
+                        .map(|_| name.to_ascii_uppercase())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                ),
+                Nargs::Any => format!(" [{} ...]", name.to_ascii_uppercase()),
+                Nargs::AtLeastOne => format!(" {} [...]", name.to_ascii_uppercase()),
+            };
+            grammars.insert(name.clone(), grammar.clone());
+            match short {
+                Some(s) => {
+                    if column_width < name.len() + grammar.len() + 6 {
+                        column_width = name.len() + grammar.len() + 6;
+                    }
+
+                    summary.push(format!("[-{s}{grammar}]"));
+                }
+                None => {
+                    if column_width < name.len() + grammar.len() + 2 {
+                        column_width = name.len() + grammar.len() + 2;
+                    }
+
+                    summary.push(format!("[--{name}{grammar}]"));
+                }
+            };
+        }
+
+        for (name, nargs, _) in &self.arguments {
+            let grammar = match nargs {
+                Nargs::Precisely(n) => format!(
+                    "{}",
+                    (0..*n)
+                        .map(|_| name.to_ascii_uppercase())
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                ),
+                Nargs::Any => format!("[{} ...]", name.to_ascii_uppercase()),
+                Nargs::AtLeastOne => format!("{} [...]", name.to_ascii_uppercase()),
+            };
+            grammars.insert(name.clone(), grammar.clone());
+
+            if column_width < grammar.len() {
+                column_width = grammar.len();
+            }
+
+            summary.push(format!("{grammar}"));
+        }
+
+        user_interface.print(format!("usage: {program} {}", summary.join(" ")));
+
+        if !self.arguments.is_empty() {
+            user_interface.print("".to_string());
+            user_interface.print("positional arguments:".to_string());
+
+            for (name, _, description) in &self.arguments {
+                let grammar = grammars
+                    .remove(name)
+                    .expect("internal error - must have been set");
+                let argument_description = match description {
+                    Some(message) => format!("  {message}"),
+                    None => "".to_string(),
+                };
+                user_interface.print(format!(" {:column_width$}{argument_description}", grammar));
+            }
+        }
+
+        user_interface.print("".to_string());
+        user_interface.print("options:".to_string());
+        user_interface.print(format!(
+            " {:column_width$}  Show this help message and exit.",
+            help_flags
+        ));
+
+        for (name, short, _, description) in &self.options {
+            let grammar = grammars
+                .remove(name)
+                .expect("internal error - must have been set");
+            let option_flags = match short {
+                Some(s) => format!("-{s}, --{name}{grammar}"),
+                None => format!("--{name}{grammar}"),
+            };
+            let option_description = match description {
+                Some(message) => format!("  {message}"),
+                None => "".to_string(),
+            };
+            user_interface.print(format!(
+                " {:column_width$}{option_description}",
+                option_flags
+            ));
+        }
+    }
+}
+
+struct ParseUnit<'ap> {
+    printer: Printer,
     parser: Parser<'ap>,
 }
 
@@ -398,7 +402,9 @@ impl<'ap> ParseUnit<'ap> {
         program: String,
         user_interface: Rc<dyn UserInterface>,
     ) -> ParseResult {
-        match self.parser.consume(tokens) {
+        let ParseUnit { parser, printer } = self;
+
+        match parser.consume(tokens) {
             Ok(Action::Continue {
                 discriminee,
                 remaining,
@@ -411,7 +417,7 @@ impl<'ap> ParseUnit<'ap> {
                 None => ParseResult::Complete,
             },
             Ok(Action::PrintHelp) => {
-                print_help(program, self.options, self.arguments, user_interface);
+                printer.print_help(program, user_interface);
                 ParseResult::Exit(0)
             }
             Err((offset, parse_error)) => {
@@ -563,9 +569,15 @@ impl<'ap> Parser<'ap> {
         })
     }
 
-    fn consume(mut self, tokens: &[&str]) -> Result<Action, (usize, ParseError)> {
+    fn consume(self, tokens: &[&str]) -> Result<Action, (usize, ParseError)> {
+        let Parser {
+            mut token_matcher,
+            mut captures,
+            discriminator,
+        } = self;
+
         let mut token_iter = tokens.iter();
-        let minimal_consume = self.discriminator.is_some();
+        let minimal_consume = discriminator.is_some();
         // 1. Feed the raw token strings to the matcher.
         let mut fed = 0;
 
@@ -573,12 +585,12 @@ impl<'ap> Parser<'ap> {
             match token_iter.next() {
                 Some(token) => {
                     let token_length = token.len();
-                    self.token_matcher
+                    token_matcher
                         .feed(token)
                         .map_err(|e| (fed, ParseError::from(e)))?;
                     fed += token_length;
 
-                    if minimal_consume && self.token_matcher.can_close() {
+                    if minimal_consume && token_matcher.can_close() {
                         break;
                     }
                 }
@@ -586,7 +598,7 @@ impl<'ap> Parser<'ap> {
             }
         }
 
-        let matches = match self.token_matcher.close() {
+        let matches = match token_matcher.close() {
             Ok(matches) | Err((_, _, matches)) if matches.contains(HELP_NAME) => {
                 return Ok(Action::PrintHelp);
             }
@@ -599,8 +611,7 @@ impl<'ap> Parser<'ap> {
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
         for match_tokens in matches.values {
             // 3. Find the corresponding capture.
-            let mut box_capture = self
-                .captures
+            let mut box_capture = captures
                 .remove(&match_tokens.name)
                 .expect("internal error - mismatch between matches and captures");
             // 4. Let the capture know it has been matched.
@@ -614,7 +625,7 @@ impl<'ap> Parser<'ap> {
                     .map_err(|e| (*offset, ParseError::from(e)))?;
             }
 
-            if let Some(ref target) = self.discriminator {
+            if let Some(ref target) = discriminator {
                 if target == &match_tokens.name {
                     match &match_tokens.values[..] {
                         [(offset, value)] => {
