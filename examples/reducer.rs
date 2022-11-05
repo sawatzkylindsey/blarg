@@ -1,5 +1,5 @@
-use blarg::field::{Collection, Nargs, Optional, Scalar, Switch};
-use blarg::parser::{CommandParser, Parameter};
+use blarg::api::{Collection, CommandParser, Optional, Parameter, Scalar, Switch};
+use blarg::model::Nargs;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
@@ -41,16 +41,16 @@ impl FromStr for Country {
 }
 
 fn main() {
-    let mut verbose: bool = false;
+    let mut _verbose: bool = false;
     let mut operand: Operand = Operand::Add;
     let mut initial: Option<u32> = None;
-    let mut countries: HashSet<Country> = HashSet::default();
+    let mut _countries: HashSet<Country> = HashSet::default();
     let mut items: Vec<u32> = Vec::default();
 
     let ap = CommandParser::new("reducer");
     let parser = ap
         .add(
-            Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))
+            Parameter::option(Switch::new(&mut _verbose, true), "verbose", Some('v'))
                 .help("Do dee doo."),
         )
         .add(Parameter::option(
@@ -64,7 +64,7 @@ fn main() {
             None,
         ))
         .add(Parameter::option(
-            Collection::new(&mut countries, Nargs::AtLeastOne),
+            Collection::new(&mut _countries, Nargs::AtLeastOne),
             "country",
             None,
         ))
@@ -75,14 +75,14 @@ fn main() {
         .expect("Invalid argument parser configuration");
     parser.parse();
     println!("Items: {items:?}");
-    execute(verbose, operand, initial, countries, items);
+    execute(_verbose, operand, initial, _countries, items);
 }
 
 fn execute(
-    verbose: bool,
+    _verbose: bool,
     operand: Operand,
     initial: Option<u32>,
-    countries: HashSet<Country>,
+    _countries: HashSet<Country>,
     items: Vec<u32>,
 ) {
     let result: u32 = items

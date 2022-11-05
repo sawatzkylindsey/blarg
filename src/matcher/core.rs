@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use thiserror::Error;
 
-use crate::tokens::*;
+use crate::matcher::api::*;
+use crate::matcher::model::*;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(crate) enum TokenMatcherError {
@@ -120,7 +121,7 @@ impl TokenMatcher {
                 } else {
                     // Flip to the next argument
                     let match_tokens = match_buffer.close().expect(
-                        "internal error - by defn, a non-open buffer must be able to close",
+                        "internal error - by definition, a non-open buffer must be able to close",
                     );
                     self.matches.push(match_tokens);
                     self.next_argument()?
@@ -135,7 +136,7 @@ impl TokenMatcher {
         match_buffer.push(self.fed, token.to_string());
 
         if let Some(_) = self.buffer.replace(match_buffer) {
-            panic!("internal error - the buffer is expected to be None");
+            unreachable!("internal error - the buffer is expected to be None");
         }
 
         Ok(())
@@ -212,7 +213,7 @@ impl TokenMatcher {
                         self.matches.push(match_tokens);
                     }
                 } else {
-                    panic!("internal error - mis-aligned short option.");
+                    unreachable!("internal error - mis-aligned short option.");
                 }
 
                 self.short_options
@@ -306,21 +307,16 @@ impl TokenMatcher {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Matches {
-    pub values: Vec<MatchTokens>,
+fn split_equals_delimiter(token: &str) -> (&str, Option<&str>) {
+    match token.split_once("=") {
+        Some((n, v)) => (n, Some(v)),
+        None => (token, None),
+    }
 }
 
 impl Matches {
     pub(crate) fn contains(&self, name: &str) -> bool {
         self.values.iter().any(|mt| &mt.name == name)
-    }
-}
-
-fn split_equals_delimiter(token: &str) -> (&str, Option<&str>) {
-    match token.split_once("=") {
-        Some((n, v)) => (n, Some(v)),
-        None => (token, None),
     }
 }
 
@@ -780,7 +776,7 @@ mod tests {
                 Bound::Range(_, n) if n < feed => {
                     assert_eq!(error, MatchError::Overcomplete("item".to_string()));
                 }
-                _ => panic!("invalid test scenario"),
+                _ => unreachable!("invalid test scenario"),
             };
 
             assert_eq!(matches.values, vec![]);

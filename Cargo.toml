@@ -12,3 +12,4 @@ rand = "^0.8"
 [dev-dependencies]
 empty = "0.0.4"
 rstest = "^0.12"
+assert_matches = "1.5"

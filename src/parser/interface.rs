@@ -1,9 +1,9 @@
-use crate::parser::ParseError;
+use crate::parser::base::ParseError;
 
 pub(crate) trait UserInterface {
     fn print(&self, message: String);
     fn print_error(&self, error: ParseError);
-    fn print_context(&self, tokens: &[&str], offset: usize);
+    fn print_error_context(&self, tokens: &[&str], offset: usize);
 }
 
 pub(crate) struct Console {}
@@ -23,7 +23,7 @@ impl UserInterface for Console {
         eprintln!("{error}");
     }
 
-    fn print_context(&self, tokens: &[&str], offset: usize) {
+    fn print_error_context(&self, tokens: &[&str], offset: usize) {
         let mut token_length = 0;
         let mut representation = String::default();
         let mut offset_spaces: Option<usize> = None;

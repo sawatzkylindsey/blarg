@@ -1,5 +1,5 @@
-use blarg::field::{Collection, Nargs, Optional, Scalar, Switch};
-use blarg::parser::{CommandParser, Condition, Parameter};
+use blarg::api::{Collection, CommandParser, Condition, Optional, Parameter, Scalar, Switch};
+use blarg::model::Nargs;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
@@ -87,7 +87,7 @@ fn main() {
 }
 
 fn execute(
-    verbose: bool,
+    _verbose: bool,
     foo_bar: FooBar,
     initial: Option<u32>,
     countries: HashSet<Country>,

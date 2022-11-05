@@ -1,62 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::str::FromStr;
-use thiserror::Error;
 
-use crate::collection::*;
-
-/// Describes the number of command inputs associated with the argument/option.
-/// Inspired by argparse: <https://docs.python.org/3/library/argparse.html#nargs>
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Nargs {
-    /// N: Limited by precisely `N` values.
-    Precisely(u8),
-    /// *: May be any number of values, including `0`.
-    Any,
-    /// +: At least one value must be specified.
-    AtLeastOne,
-}
-
-/// Marker trait for capturable types that can formulate an option in the CLI
-pub trait CliOption {}
-
-/// Marker trait for capturable types that can formulate an argument in the CLI.
-pub trait CliArgument {}
-
-/// Behaviour to capture an explicit generic type T from an input `&str`.
-///
-/// We use this at the bottom of the argument parser object graph so the compiler can maintain each field's type.
-#[doc(hidden)]
-pub trait GenericCapturable<'ap, T> {
-    /// Declare that the parameter has been matched.
-    fn matched(&mut self);
-
-    /// Capture a value into the generic type T for this parameter.
-    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion>;
-
-    /// Get the `Nargs` for this implementation.
-    fn nargs(&self) -> Nargs;
-}
-
-#[derive(Debug, Error)]
-#[doc(hidden)]
-#[error("'{token}' cannot convert to {type_name}.")]
-pub struct InvalidConversion {
-    token: String,
-    type_name: &'static str,
-}
-
-/// Behaviour to capture an implicit generic type T from an input `&str`.
-///
-/// We use this at the middle/top of the argument parser object graph so that different types may all be 'captured' in a single argument parser.
-pub(crate) trait AnonymousCapturable {
-    /// Declare that the parameter has been matched.
-    fn matched(&mut self);
-
-    /// Capture a value anonymously for this parameter.
-    fn capture(&mut self, value: &str) -> Result<(), InvalidConversion>;
-}
+use crate::api::capture::*;
+use crate::model::Nargs;
 
 /// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
 pub struct Scalar<'ap, T> {
@@ -103,11 +52,6 @@ where
 ///
 /// Notice, once Rust allows for 'specialization', we can actually implement this on `Collectable`:
 /// <https://doc.rust-lang.org/unstable-book/language-features/specialization.html>
-///
-/// ```ignore
-/// // Implement switch behaviour via specialization - aka: polymorphism.
-/// impl<bool> Collectable<bool> for Option<bool> {
-/// ```
 pub struct Switch<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
     target: Option<T>,
@@ -133,7 +77,7 @@ impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T> {
     }
 
     fn capture(&mut self, _token: &str) -> Result<(), InvalidConversion> {
-        panic!("internal error - must not capture on a Switch");
+        unreachable!("internal error - must not capture on a Switch");
     }
 
     fn nargs(&self) -> Nargs {
@@ -234,32 +178,38 @@ where
     }
 }
 
-pub struct Field<'ap, T: 'ap> {
-    generic_capturable: Box<dyn GenericCapturable<'ap, T> + 'ap>,
-}
-
-impl<'ap, T> Field<'ap, T> {
-    pub(crate) fn binding(generic_capturable: impl GenericCapturable<'ap, T> + 'ap) -> Self {
-        Self {
-            generic_capturable: Box::new(generic_capturable),
-        }
+impl<T> Collectable<T> for Vec<T> {
+    fn add(&mut self, item: T) {
+        self.push(item);
     }
 }
 
-impl<'ap, T> AnonymousCapturable for Field<'ap, T> {
-    fn matched(&mut self) {
-        self.generic_capturable.matched();
-    }
-
-    fn capture(&mut self, value: &str) -> Result<(), InvalidConversion> {
-        self.generic_capturable.capture(value)
+impl<T: Eq + std::hash::Hash> Collectable<T> for HashSet<T> {
+    fn add(&mut self, item: T) {
+        self.insert(item);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
+
+    #[test]
+    fn vec() {
+        let mut collection: Vec<u32> = Vec::default();
+        collection.add(1);
+        collection.add(0);
+        assert_eq!(collection, vec![1, 0]);
+    }
+
+    #[test]
+    fn hash_set() {
+        let mut collection: HashSet<u32> = HashSet::default();
+        collection.add(1);
+        collection.add(0);
+        collection.add(1);
+        assert_eq!(collection, HashSet::from([1, 0]));
+    }
 
     #[test]
     fn value_capture() {
