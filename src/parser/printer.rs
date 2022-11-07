@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use crate::constant::*;
 use crate::model::Nargs;
@@ -14,6 +13,11 @@ pub(crate) struct Printer {
 }
 
 impl Printer {
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self::new(Vec::default(), Vec::default())
+    }
+
     pub(crate) fn new(
         mut options: Vec<OptionParameter>,
         arguments: Vec<ArgumentParameter>,
@@ -22,7 +26,11 @@ impl Printer {
         Self { options, arguments }
     }
 
-    pub(crate) fn print_help(&self, program: String, user_interface: Rc<dyn UserInterface>) {
+    pub(crate) fn print_help(
+        &self,
+        program: String,
+        user_interface: &(impl UserInterface + ?Sized),
+    ) {
         let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
         let mut summary = vec![format!("[-{HELP_SHORT}]")];
         let mut column_width = help_flags.len();

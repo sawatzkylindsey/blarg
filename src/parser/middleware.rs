@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::rc::Rc;
 
 use crate::parser::base::*;
 use crate::parser::interface::UserInterface;
@@ -10,14 +9,14 @@ pub struct GeneralParser<'ap> {
     program: String,
     command: ParseUnit<'ap>,
     sub_commands: HashMap<String, ParseUnit<'ap>>,
-    user_interface: Rc<dyn UserInterface>,
+    user_interface: Box<dyn UserInterface>,
 }
 
 impl<'ap> GeneralParser<'ap> {
     pub(crate) fn command(
         program: String,
         command: ParseUnit<'ap>,
-        user_interface: Rc<dyn UserInterface>,
+        user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
             program,
@@ -31,7 +30,7 @@ impl<'ap> GeneralParser<'ap> {
         program: String,
         command: ParseUnit<'ap>,
         sub_commands: HashMap<String, ParseUnit<'ap>>,
-        user_interface: Rc<dyn UserInterface>,
+        user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
             program,
@@ -48,6 +47,11 @@ pub(crate) struct ParseUnit<'ap> {
 }
 
 impl<'ap> ParseUnit<'ap> {
+    #[cfg(test)]
+    pub(crate) fn empty() -> Self {
+        Self::new(Parser::empty(), Printer::empty())
+    }
+
     pub(crate) fn new(parser: Parser<'ap>, printer: Printer) -> Self {
         Self { parser, printer }
     }
@@ -56,7 +60,7 @@ impl<'ap> ParseUnit<'ap> {
         self,
         tokens: &[&str],
         program: String,
-        user_interface: Rc<dyn UserInterface>,
+        user_interface: &(impl UserInterface + ?Sized),
     ) -> ParseResult {
         let ParseUnit { parser, printer } = self;
 
@@ -78,13 +82,14 @@ impl<'ap> ParseUnit<'ap> {
             }
             Err((offset, parse_error)) => {
                 user_interface.print_error(parse_error);
-                user_interface.print_error_context(tokens, offset);
+                user_interface.print_error_context(offset, tokens);
                 ParseResult::Exit(1)
             }
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum ParseResult {
     Complete,
     Incomplete {
@@ -97,11 +102,9 @@ enum ParseResult {
 
 impl<'ap> GeneralParser<'ap> {
     fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
-        let command_result = self.command.invoke(
-            tokens,
-            self.program.clone(),
-            Rc::clone(&self.user_interface),
-        );
+        let command_result =
+            self.command
+                .invoke(tokens, self.program.clone(), &*self.user_interface);
 
         match command_result {
             ParseResult::Complete => Ok(()),
@@ -119,7 +122,7 @@ impl<'ap> GeneralParser<'ap> {
                                 .collect::<Vec<&str>>()
                                 .as_slice(),
                             format!("{program} {variant}", program = self.program),
-                            Rc::clone(&self.user_interface),
+                            &*self.user_interface,
                         ) {
                             ParseResult::Complete => Ok(()),
                             ParseResult::Incomplete { .. } => {
@@ -137,7 +140,7 @@ impl<'ap> GeneralParser<'ap> {
                         self.user_interface
                             .print_error(ParseError(format!("Unknown sub-command '{variant}'.")));
                         self.user_interface
-                            .print_error_context(tokens, variant_offset);
+                            .print_error_context(variant_offset, tokens);
                         Err(1)
                     }
                 }
@@ -160,5 +163,201 @@ impl<'ap> GeneralParser<'ap> {
                 std::process::exit(exit_code);
             }
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{AnonymousCapture, GenericCapturable, Scalar};
+    use crate::matcher::{ArgumentConfig, Bound, OptionConfig};
+    use crate::parser::InMemory;
+    use rstest::rstest;
+
+    #[test]
+    fn invoke_empty() {
+        // Setup
+        let parse_unit = ParseUnit::empty();
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(empty::slice(), "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(result, ParseResult::Complete);
+        assert!((*interface.message.borrow()).is_none());
+        assert!((*interface.error.borrow()).is_none());
+        assert_eq!((*interface.error_context.borrow()), None);
+    }
+
+    #[rstest]
+    #[case(vec!["1"])]
+    #[case(vec!["01"])]
+    #[case(vec!["--flag", "1"])]
+    fn invoke(#[case] tokens: Vec<&str>) {
+        // Setup
+        let mut variable: u32 = 0;
+        let generic_capture = Scalar::new(&mut variable);
+        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let capture = AnonymousCapture::bind(generic_capture);
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(config, Box::new(capture))],
+                None,
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(result, ParseResult::Complete);
+        assert!((*interface.message.borrow()).is_none());
+        assert!((*interface.error.borrow()).is_none());
+        assert_eq!((*interface.error_context.borrow()), None);
+    }
+
+    #[rstest]
+    #[case(vec!["1"], 0, "1", vec![])]
+    #[case(vec!["01"], 0, "01", vec![])]
+    #[case(vec!["--flag", "1"], 6, "1", vec![])]
+    #[case(vec!["1", "a"], 0, "1", vec!["a"])]
+    #[case(vec!["01", "a"], 0, "01", vec!["a"])]
+    #[case(vec!["--flag", "1", "a"], 6, "1", vec!["a"])]
+    #[case(vec!["1", "a", "--b=123"], 0, "1", vec!["a", "--b=123"])]
+    #[case(vec!["01", "a", "--b=123"], 0, "01", vec!["a", "--b=123"])]
+    #[case(vec!["--flag", "1", "a", "--b=123"], 6, "1", vec!["a", "--b=123"])]
+    fn invoke_discriminator(
+        #[case] tokens: Vec<&str>,
+        #[case] offset: usize,
+        #[case] discriminee: &str,
+        #[case] remaining: Vec<&str>,
+    ) {
+        // Setup
+        let mut variable: u32 = 0;
+        let generic_capture = Scalar::new(&mut variable);
+        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let capture = AnonymousCapture::bind(generic_capture);
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(config, Box::new(capture))],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(
+            result,
+            ParseResult::Incomplete {
+                variant_offset: offset,
+                variant: discriminee.to_string(),
+                remaining: remaining.into_iter().map(|s| s.to_string()).collect(),
+            }
+        );
+        assert!((*interface.message.borrow()).is_none());
+        assert!((*interface.error.borrow()).is_none());
+        assert_eq!((*interface.error_context.borrow()), None);
+    }
+
+    #[rstest]
+    #[case(vec!["--help"])]
+    #[case(vec!["-h"])]
+    fn invoke_help(#[case] tokens: Vec<&str>) {
+        // Setup
+        let parse_unit = ParseUnit::empty();
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(result, ParseResult::Exit(0));
+
+        assert!((*interface.message.borrow())
+            .as_ref()
+            .unwrap()
+            .contains("-h, --help"));
+        assert!((*interface.error.borrow()).is_none());
+        assert_eq!((*interface.error_context.borrow()), None);
+    }
+
+    #[test]
+    fn invoke_argument_unmatched() {
+        // Setup
+        let parse_unit = ParseUnit::empty();
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(&["unmatched"], "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(result, ParseResult::Exit(1));
+
+        assert!((*interface.message.borrow()).is_none());
+        assert!((*interface.error.borrow())
+            .as_ref()
+            .unwrap()
+            .contains("Parse error"));
+        assert_eq!(
+            (*interface.error_context.borrow()).as_ref().unwrap(),
+            &(0, vec!["unmatched".to_string()])
+        );
+    }
+
+    #[rstest]
+    #[case(vec!["not-u32"], 0)]
+    #[case(vec!["--flag", "not-u32"], 6)]
+    fn invoke_argument_inconvertable(#[case] tokens: Vec<&str>, #[case] offset: usize) {
+        // Setup
+        let mut variable: u32 = 0;
+        let generic_capture = Scalar::new(&mut variable);
+        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let capture = AnonymousCapture::bind(generic_capture);
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(config, Box::new(capture))],
+                None,
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let interface = InMemory::default();
+
+        // Execute
+        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+
+        // Verify
+        assert_eq!(result, ParseResult::Exit(1));
+
+        assert!((*interface.message.borrow()).is_none());
+        assert!((*interface.error.borrow())
+            .as_ref()
+            .unwrap()
+            .contains("Parse error"));
+        assert_eq!(
+            (*interface.error_context.borrow()).as_ref().unwrap(),
+            &(offset, tokens.into_iter().map(|s| s.to_string()).collect())
+        );
     }
 }

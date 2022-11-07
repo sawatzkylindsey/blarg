@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 use crate::api::capture::*;
 use crate::api::field::*;
@@ -212,7 +211,7 @@ impl<'ap> CommandParser<'ap> {
         Ok(GeneralParser::command(
             self.program,
             command,
-            Rc::new(Console::default()),
+            Box::new(Console::default()),
         ))
     }
 }
@@ -267,7 +266,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
             self.root.program,
             command,
             sub_commands,
-            Rc::new(Console::default()),
+            Box::new(Console::default()),
         ))
     }
 }
