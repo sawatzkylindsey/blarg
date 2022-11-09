@@ -46,12 +46,15 @@ pub(crate) struct ArgumentConfig {
 }
 
 impl ArgumentConfig {
-    pub(crate) fn new(name: String, bound: Bound) -> Self {
-        Self { name, bound }
+    pub(crate) fn new(name: impl Into<String>, bound: Bound) -> Self {
+        Self {
+            name: name.into(),
+            bound,
+        }
     }
 
-    pub(crate) fn name(&self) -> String {
-        self.name.clone()
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 
     pub(crate) fn bound(&self) -> Bound {
@@ -67,12 +70,16 @@ pub(crate) struct OptionConfig {
 }
 
 impl OptionConfig {
-    pub(crate) fn new(name: String, short: Option<char>, bound: Bound) -> Self {
-        Self { name, short, bound }
+    pub(crate) fn new(name: impl Into<String>, short: Option<char>, bound: Bound) -> Self {
+        Self {
+            name: name.into(),
+            short,
+            bound,
+        }
     }
 
-    pub(crate) fn name(&self) -> String {
-        self.name.clone()
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 
     pub(crate) fn short(&self) -> &Option<char> {

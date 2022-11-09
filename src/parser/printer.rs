@@ -28,7 +28,7 @@ impl Printer {
 
     pub(crate) fn print_help(
         &self,
-        program: String,
+        program: impl Into<String>,
         user_interface: &(impl UserInterface + ?Sized),
     ) {
         let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
@@ -89,7 +89,11 @@ impl Printer {
             summary.push(format!("{grammar}"));
         }
 
-        user_interface.print(format!("usage: {program} {}", summary.join(" ")));
+        user_interface.print(format!(
+            "usage: {p} {s}",
+            p = program.into(),
+            s = summary.join(" ")
+        ));
 
         if !self.arguments.is_empty() {
             user_interface.print("".to_string());

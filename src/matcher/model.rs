@@ -33,9 +33,9 @@ pub(super) struct MatchBuffer {
 }
 
 impl MatchBuffer {
-    pub(super) fn new(name: String, bound: Bound) -> Self {
+    pub(super) fn new(name: impl Into<String>, bound: Bound) -> Self {
         Self {
-            name,
+            name: name.into(),
             bound,
             values: Vec::default(),
         }
@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn argument_config() {
-        let name = "name".to_string();
+        let name = "name";
 
         for _ in 0..100 {
             let bound: Bound = thread_rng().gen();
@@ -117,7 +117,7 @@ mod tests {
     #[case(None)]
     #[case(Some('n'))]
     fn option_config(#[case] short: Option<char>) {
-        let name = "name".to_string();
+        let name = "name";
 
         for _ in 0..100 {
             let bound: Bound = thread_rng().gen();
@@ -142,7 +142,7 @@ mod tests {
     #[case(Bound::Range(1, 2), 2, true)]
     #[case(Bound::Range(10, 20), 2, false)]
     fn match_buffer_lower(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
-        let name = "name".to_string();
+        let name = "name";
         let lower = match &bound {
             &Bound::Range(lower, _) => lower,
             &Bound::Lower(lower) => lower,
@@ -168,7 +168,7 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap(),
                 MatchTokens {
-                    name,
+                    name: name.to_string(),
                     values: tokens,
                 }
             );
@@ -177,7 +177,7 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooFewValues {
-                    name,
+                    name: name.to_string(),
                     provided: feed as usize,
                     expected: lower,
                 }
@@ -193,7 +193,7 @@ mod tests {
     #[case(Bound::Range(0, 1), 2, false)]
     #[case(Bound::Range(0, 10), 20, false)]
     fn match_buffer_upper(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
-        let name = "name".to_string();
+        let name = "name";
         let upper = match &bound {
             &Bound::Range(_, upper) => upper,
             _ => unreachable!("un-planned test case"),
@@ -217,7 +217,7 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap(),
                 MatchTokens {
-                    name,
+                    name: name.to_string(),
                     values: tokens,
                 }
             );
@@ -225,7 +225,7 @@ mod tests {
             assert_eq!(
                 pb.close().unwrap_err(),
                 CloseError::TooManyValues {
-                    name,
+                    name: name.to_string(),
                     provided: feed as usize,
                     expected: upper,
                 }

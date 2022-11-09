@@ -60,15 +60,17 @@ impl TokenMatcher {
 
         for option_config in options.into_iter() {
             if option_bounds
-                .insert(option_config.name(), option_config.bound())
+                .insert(option_config.name().to_string(), option_config.bound())
                 .is_some()
             {
-                return Err(TokenMatcherError::DuplicateOption(option_config.name()));
+                return Err(TokenMatcherError::DuplicateOption(
+                    option_config.name().to_string(),
+                ));
             }
 
             if let Some(short) = option_config.short() {
                 if short_options
-                    .insert(short.clone(), option_config.name())
+                    .insert(short.clone(), option_config.name().to_string())
                     .is_some()
                 {
                     return Err(TokenMatcherError::DuplicateShortOption(short.clone()));
@@ -187,7 +189,7 @@ impl TokenMatcher {
                     // If this is the final character from the short option token (the variable 'short_option_name').
                     if index + 1 == short_option_name.len() {
                         // Only the final option may accept values.
-                        let mut match_buffer = MatchBuffer::new(name.to_string(), bound);
+                        let mut match_buffer = MatchBuffer::new(name.clone(), bound);
 
                         match single_argument {
                             // If an equals delimited value was specified, use it.
@@ -209,7 +211,7 @@ impl TokenMatcher {
                         };
                     } else {
                         // All characters in the head of the short option token (the variable 'short_option_name') must allow no values.
-                        let match_tokens = MatchBuffer::new(name.to_string(), bound).close()?;
+                        let match_tokens = MatchBuffer::new(name.clone(), bound).close()?;
                         self.matches.push(match_tokens);
                     }
                 } else {
@@ -328,8 +330,8 @@ mod tests {
     #[test]
     fn option_duplicate() {
         let options = HashSet::from([
-            OptionConfig::new("abc".to_string(), None, Bound::Range(1, 1)),
-            OptionConfig::new("abc".to_string(), Some('a'), Bound::Range(1, 1)),
+            OptionConfig::new("abc", None, Bound::Range(1, 1)),
+            OptionConfig::new("abc", Some('a'), Bound::Range(1, 1)),
         ]);
         let error = TokenMatcher::new(options, VecDeque::default()).unwrap_err();
         assert_eq!(error, TokenMatcherError::DuplicateOption("abc".to_string()));
@@ -343,7 +345,7 @@ mod tests {
     #[case(Bound::Range(0, 1), 2, false)]
     fn option_range_upper(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
         // Setup
-        let options = HashSet::from([OptionConfig::new("initial".to_string(), None, bound)]);
+        let options = HashSet::from([OptionConfig::new("initial", None, bound)]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
         let mut feed_error = false;
@@ -400,7 +402,7 @@ mod tests {
     #[case(Bound::Range(1, 3), 2, true)]
     fn option_lower(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
         // Setup
-        let options = HashSet::from([OptionConfig::new("initial".to_string(), None, bound)]);
+        let options = HashSet::from([OptionConfig::new("initial", None, bound)]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
@@ -444,11 +446,7 @@ mod tests {
     #[case(100)]
     fn option_unlimited(#[case] feed: u8) {
         // Setup
-        let options = HashSet::from([OptionConfig::new(
-            "initial".to_string(),
-            None,
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("initial", None, Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
@@ -479,11 +477,7 @@ mod tests {
 
     #[test]
     fn option_unmatched() {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            None,
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", None, Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
         assert_eq!(
@@ -494,11 +488,7 @@ mod tests {
 
     #[test]
     fn option_repeat() {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            None,
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", None, Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
         tp.feed("--verbose").unwrap();
@@ -523,8 +513,8 @@ mod tests {
     ) {
         // Setup
         let options = HashSet::from([
-            OptionConfig::new("verbose".to_string(), Some('v'), Bound::Range(0, 0)),
-            OptionConfig::new("flag".to_string(), Some('f'), Bound::Lower(0)),
+            OptionConfig::new("verbose", Some('v'), Bound::Range(0, 0)),
+            OptionConfig::new("flag", Some('f'), Bound::Lower(0)),
         ]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
@@ -573,11 +563,7 @@ mod tests {
     #[case(vec!["-i=a", "x"], None)]
     fn option_equals_delimiter(#[case] tokens: Vec<&str>, #[case] expected: Option<(usize, &str)>) {
         // Setup
-        let options = HashSet::from([OptionConfig::new(
-            "initial".to_string(),
-            Some('i'),
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("initial", Some('i'), Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
         let mut result = Ok(());
 
@@ -647,8 +633,8 @@ mod tests {
     #[test]
     fn option_short_too_few() {
         let options = HashSet::from([
-            OptionConfig::new("verbose".to_string(), Some('v'), Bound::Lower(1)),
-            OptionConfig::new("flag".to_string(), Some('f'), Bound::Lower(0)),
+            OptionConfig::new("verbose", Some('v'), Bound::Lower(1)),
+            OptionConfig::new("flag", Some('f'), Bound::Lower(0)),
         ]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
@@ -662,8 +648,8 @@ mod tests {
     #[test]
     fn option_short_duplicate() {
         let options = HashSet::from([
-            OptionConfig::new("verbose".to_string(), Some('v'), Bound::Lower(0)),
-            OptionConfig::new("item".to_string(), Some('v'), Bound::Lower(0)),
+            OptionConfig::new("verbose", Some('v'), Bound::Lower(0)),
+            OptionConfig::new("item", Some('v'), Bound::Lower(0)),
         ]);
         let error = TokenMatcher::new(options, VecDeque::default()).unwrap_err();
         assert_eq!(error, TokenMatcherError::DuplicateShortOption('v'));
@@ -671,11 +657,7 @@ mod tests {
 
     #[test]
     fn option_short_unmatched() {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            Some('v'),
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", Some('v'), Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
         assert_eq!(
@@ -686,11 +668,7 @@ mod tests {
 
     #[test]
     fn option_short_repeat() {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            Some('v'),
-            Bound::Lower(0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", Some('v'), Bound::Lower(0))]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
 
         tp.feed("-v").unwrap();
@@ -711,7 +689,7 @@ mod tests {
     #[case(Bound::Range(1, 1), 1, true)]
     fn option_can_close(#[case] bound: Bound, #[case] feed: u8, #[case] can_close: bool) {
         // Setup
-        let options = HashSet::from([OptionConfig::new("initial".to_string(), None, bound)]);
+        let options = HashSet::from([OptionConfig::new("initial", None, bound)]);
         let mut tp = TokenMatcher::new(options, VecDeque::default()).unwrap();
         // At first, it can always close - the token matcher only takes in options.
         assert!(tp.can_close());
@@ -738,7 +716,7 @@ mod tests {
     #[case(Bound::Range(1, 1), 2, false)]
     fn argument_range_upper(#[case] bound: Bound, #[case] feed: u8, #[case] expected_ok: bool) {
         // Setup
-        let arguments = VecDeque::from([ArgumentConfig::new("item".to_string(), bound)]);
+        let arguments = VecDeque::from([ArgumentConfig::new("item", bound)]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
         let mut feed_error = false;
@@ -789,8 +767,7 @@ mod tests {
     #[case(2, true)]
     fn argument_range_feed_lower(#[case] feed: u8, #[case] expected_ok: bool) {
         // Setup
-        let arguments =
-            VecDeque::from([ArgumentConfig::new("item".to_string(), Bound::Range(1, 3))]);
+        let arguments = VecDeque::from([ArgumentConfig::new("item", Bound::Range(1, 3))]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
@@ -824,7 +801,7 @@ mod tests {
     #[case(100, true)]
     fn argument_unlimited(#[case] feed: u8, #[case] expected_ok: bool) {
         // Setup
-        let arguments = VecDeque::from([ArgumentConfig::new("item".to_string(), Bound::Lower(1))]);
+        let arguments = VecDeque::from([ArgumentConfig::new("item", Bound::Lower(1))]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
@@ -863,8 +840,8 @@ mod tests {
     fn arguments_multiple() {
         // Setup
         let arguments = VecDeque::from([
-            ArgumentConfig::new("arg1".to_string(), Bound::Range(1, 2)),
-            ArgumentConfig::new("arg2".to_string(), Bound::Lower(1)),
+            ArgumentConfig::new("arg1", Bound::Range(1, 2)),
+            ArgumentConfig::new("arg2", Bound::Lower(1)),
         ]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
 
@@ -892,8 +869,8 @@ mod tests {
     #[test]
     fn arguments_with_preceeding_unlimited() {
         let arguments = VecDeque::from([
-            ArgumentConfig::new("arg1".to_string(), Bound::Lower(1)),
-            ArgumentConfig::new("arg2".to_string(), Bound::Range(1, 1)),
+            ArgumentConfig::new("arg1", Bound::Lower(1)),
+            ArgumentConfig::new("arg2", Bound::Range(1, 1)),
         ]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
 
@@ -923,7 +900,7 @@ mod tests {
     #[case(Bound::Range(1, 1), 1, true)]
     fn argument_can_close(#[case] bound: Bound, #[case] feed: u8, #[case] can_close: bool) {
         // Setup
-        let arguments = VecDeque::from([ArgumentConfig::new("item".to_string(), bound)]);
+        let arguments = VecDeque::from([ArgumentConfig::new("item", bound)]);
         let mut tp = TokenMatcher::new(HashSet::default(), arguments).unwrap();
         let tokens: Vec<String> = (0..feed).map(|i| i.to_string()).collect();
 
@@ -948,14 +925,10 @@ mod tests {
         #[case] z_offset: usize,
         #[case] a_index: Option<usize>,
     ) {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            None,
-            Bound::Range(0, 0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", None, Bound::Range(0, 0))]);
         let arguments = VecDeque::from([
-            ArgumentConfig::new("arg1".to_string(), Bound::Range(1, 2)),
-            ArgumentConfig::new("arg2".to_string(), Bound::Lower(1)),
+            ArgumentConfig::new("arg1", Bound::Range(1, 2)),
+            ArgumentConfig::new("arg2", Bound::Lower(1)),
         ]);
         let mut tp = TokenMatcher::new(options, arguments).unwrap();
 
@@ -998,14 +971,10 @@ mod tests {
         #[case] z_offset: usize,
         #[case] a_index_offset: Option<(usize, usize)>,
     ) {
-        let options = HashSet::from([OptionConfig::new(
-            "initial".to_string(),
-            None,
-            Bound::Range(1, 1),
-        )]);
+        let options = HashSet::from([OptionConfig::new("initial", None, Bound::Range(1, 1))]);
         let arguments = VecDeque::from([
-            ArgumentConfig::new("arg1".to_string(), Bound::Range(1, 2)),
-            ArgumentConfig::new("arg2".to_string(), Bound::Lower(1)),
+            ArgumentConfig::new("arg1", Bound::Range(1, 2)),
+            ArgumentConfig::new("arg2", Bound::Lower(1)),
         ]);
         let mut tp = TokenMatcher::new(options, arguments).unwrap();
 
@@ -1038,14 +1007,10 @@ mod tests {
 
     #[test]
     fn arguments_option_breaker() {
-        let options = HashSet::from([OptionConfig::new(
-            "verbose".to_string(),
-            None,
-            Bound::Range(0, 0),
-        )]);
+        let options = HashSet::from([OptionConfig::new("verbose", None, Bound::Range(0, 0))]);
         let arguments = VecDeque::from([
-            ArgumentConfig::new("arg1".to_string(), Bound::Range(1, 2)),
-            ArgumentConfig::new("arg2".to_string(), Bound::Lower(1)),
+            ArgumentConfig::new("arg1", Bound::Range(1, 2)),
+            ArgumentConfig::new("arg2", Bound::Lower(1)),
         ]);
         let mut tp = TokenMatcher::new(options, arguments).unwrap();
 

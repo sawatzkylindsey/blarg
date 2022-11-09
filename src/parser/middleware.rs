@@ -14,12 +14,12 @@ pub struct GeneralParser<'ap> {
 
 impl<'ap> GeneralParser<'ap> {
     pub(crate) fn command(
-        program: String,
+        program: impl Into<String>,
         command: ParseUnit<'ap>,
         user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
-            program,
+            program: program.into(),
             command,
             sub_commands: HashMap::default(),
             user_interface,
@@ -27,13 +27,13 @@ impl<'ap> GeneralParser<'ap> {
     }
 
     pub(crate) fn sub_command(
-        program: String,
+        program: impl Into<String>,
         command: ParseUnit<'ap>,
         sub_commands: HashMap<String, ParseUnit<'ap>>,
         user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
-            program,
+            program: program.into(),
             command,
             sub_commands,
             user_interface,
@@ -59,7 +59,7 @@ impl<'ap> ParseUnit<'ap> {
     fn invoke(
         self,
         tokens: &[&str],
-        program: String,
+        program: impl Into<String>,
         user_interface: &(impl UserInterface + ?Sized),
     ) -> ParseResult {
         let ParseUnit { parser, printer } = self;
@@ -181,7 +181,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(empty::slice(), "program".to_string(), &interface);
+        let result = parse_unit.invoke(empty::slice(), "program", &interface);
 
         // Verify
         assert_eq!(result, ParseResult::Complete);
@@ -198,12 +198,12 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parse_unit = ParseUnit::new(
             Parser::new(
                 vec![(
-                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
                     Box::new(BlackHole::default()),
                 )],
                 vec![(config, Box::new(capture))],
@@ -215,7 +215,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
 
         // Verify
         assert_eq!(result, ParseResult::Complete);
@@ -243,12 +243,12 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parse_unit = ParseUnit::new(
             Parser::new(
                 vec![(
-                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
                     Box::new(BlackHole::default()),
                 )],
                 vec![(config, Box::new(capture))],
@@ -260,7 +260,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
 
         // Verify
         assert_eq!(
@@ -285,7 +285,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
 
         // Verify
         assert_eq!(result, ParseResult::Exit(0));
@@ -305,7 +305,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(&["unmatched"], "program".to_string(), &interface);
+        let result = parse_unit.invoke(&["unmatched"], "program", &interface);
 
         // Verify
         assert_eq!(result, ParseResult::Exit(1));
@@ -328,12 +328,12 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parse_unit = ParseUnit::new(
             Parser::new(
                 vec![(
-                    OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
                     Box::new(BlackHole::default()),
                 )],
                 vec![(config, Box::new(capture))],
@@ -345,7 +345,7 @@ mod tests {
         let interface = InMemory::default();
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program".to_string(), &interface);
+        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
 
         // Verify
         assert_eq!(result, ParseResult::Exit(1));

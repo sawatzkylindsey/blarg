@@ -87,15 +87,14 @@ impl<'ap> Parser<'ap> {
         arguments: Vec<ArgumentCapture<'ap>>,
         discriminator: Option<String>,
     ) -> Result<Self, ConfigError> {
-        let help_config =
-            OptionConfig::new(HELP_NAME.to_string(), Some(HELP_SHORT), Bound::Range(0, 0));
+        let help_config = OptionConfig::new(HELP_NAME, Some(HELP_SHORT), Bound::Range(0, 0));
         let mut option_configs = HashSet::from([help_config]);
         let mut argument_configs = VecDeque::default();
         let mut captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>> =
             HashMap::default();
 
         for (oc, f) in options.into_iter() {
-            if captures.insert(oc.name(), f).is_some() {
+            if captures.insert(oc.name().to_string(), f).is_some() {
                 return Err(ConfigError(format!(
                     "Cannot duplicate the parameter '{}'.",
                     oc.name()
@@ -106,7 +105,7 @@ impl<'ap> Parser<'ap> {
         }
 
         for (ac, f) in arguments.into_iter() {
-            if captures.insert(ac.name(), f).is_some() {
+            if captures.insert(ac.name().to_string(), f).is_some() {
                 return Err(ConfigError(format!(
                     "Cannot duplicate the parameter '{}'.",
                     ac.name()
@@ -254,11 +253,7 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let config = OptionConfig::new(
-            "variable".to_string(),
-            Some('v'),
-            generic_capture.nargs().into(),
-        );
+        let config = OptionConfig::new("variable", Some('v'), generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parser = Parser::new(vec![(config, Box::new(capture))], Vec::default(), None).unwrap();
 
@@ -285,7 +280,7 @@ mod tests {
         // Setup
         let mut variable: Vec<u32> = Vec::default();
         let generic_capture = Collection::new(&mut variable, Nargs::Any);
-        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parser = Parser::new(Vec::default(), vec![(config, Box::new(capture))], None).unwrap();
 
@@ -314,7 +309,7 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable".to_string(), generic_capture.nargs().into());
+        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parser = Parser::new(Vec::default(), vec![(config, Box::new(capture))], None).unwrap();
 
@@ -341,16 +336,16 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let name = "variable".to_string();
+        let name = "variable";
         let config = ArgumentConfig::new(name.clone(), generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parser = Parser::new(
             vec![(
-                OptionConfig::new("flag".to_string(), None, Bound::Range(0, 0)),
+                OptionConfig::new("flag", None, Bound::Range(0, 0)),
                 Box::new(BlackHole::default()),
             )],
             vec![(config, Box::new(capture))],
-            Some(name),
+            Some(name.to_string()),
         )
         .unwrap();
 
@@ -372,11 +367,11 @@ mod tests {
         let result = Parser::new(
             vec![
                 (
-                    OptionConfig::new("flag".to_string(), None, thread_rng().gen()),
+                    OptionConfig::new("flag", None, thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
                 (
-                    OptionConfig::new("flag".to_string(), None, thread_rng().gen()),
+                    OptionConfig::new("flag", None, thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
             ],
@@ -391,11 +386,11 @@ mod tests {
         let result = Parser::new(
             vec![
                 (
-                    OptionConfig::new("flagA".to_string(), Some('f'), thread_rng().gen()),
+                    OptionConfig::new("flagA", Some('f'), thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
                 (
-                    OptionConfig::new("flagB".to_string(), Some('f'), thread_rng().gen()),
+                    OptionConfig::new("flagB", Some('f'), thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
             ],
@@ -411,11 +406,11 @@ mod tests {
             Vec::default(),
             vec![
                 (
-                    ArgumentConfig::new("flag".to_string(), thread_rng().gen()),
+                    ArgumentConfig::new("flag", thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
                 (
-                    ArgumentConfig::new("flag".to_string(), thread_rng().gen()),
+                    ArgumentConfig::new("flag", thread_rng().gen()),
                     Box::new(BlackHole::default()),
                 ),
             ],
@@ -428,11 +423,11 @@ mod tests {
     fn parser_duplicate_option_argument() {
         let result = Parser::new(
             vec![(
-                OptionConfig::new("value".to_string(), None, thread_rng().gen()),
+                OptionConfig::new("value", None, thread_rng().gen()),
                 Box::new(BlackHole::default()),
             )],
             vec![(
-                ArgumentConfig::new("value".to_string(), thread_rng().gen()),
+                ArgumentConfig::new("value", thread_rng().gen()),
                 Box::new(BlackHole::default()),
             )],
             None,
