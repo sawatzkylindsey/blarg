@@ -74,7 +74,7 @@ Parameter         | Narg | Grammar                  | Description
 Scalar<T>         | \    | [--NAME VALUE]           | precisely 1
 Optional<T>       | \    | [--NAME VALUE]           | precisely 1
 Collection<C<T>>  | n    | [--NAME VALUE .. VALUE]  | precisely n
-Collection<C<T>>  | *    | [--NAME VALUE ...]       | any amount; captured greedily
+Collection<C<T>>  | *    | [--NAME [VALUE ...]]     | any amount; captured greedily
 Collection<C<T>>  | +    | [--NAME VALUE [...]]     | at least 1; captured greedily
 Switch<T>         | \    | [--NAME]                 | precisely 0
 ```

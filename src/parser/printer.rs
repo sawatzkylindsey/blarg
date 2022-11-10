@@ -52,8 +52,8 @@ impl Printer {
             grammars.insert(name.clone(), grammar.clone());
             match short {
                 Some(s) => {
-                    if column_width < name.len() + grammar.len() + 6 {
-                        column_width = name.len() + grammar.len() + 6;
+                    if column_width < name.len() + (grammar.len() * 2) + 6 {
+                        column_width = name.len() + (grammar.len() * 2) + 6;
                     }
 
                     summary.push(format!("[-{s}{grammar}]"));
@@ -123,7 +123,7 @@ impl Printer {
                 .remove(name)
                 .expect("internal error - must have been set");
             let option_flags = match short {
-                Some(s) => format!("-{s}, --{name}{grammar}"),
+                Some(s) => format!("-{s}{grammar}, --{name}{grammar}"),
                 None => format!("--{name}{grammar}"),
             };
             let option_description = match description {
@@ -135,5 +135,313 @@ impl Printer {
                 option_flags
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::util::InMemoryInterface;
+
+    #[test]
+    fn print_help_empty() {
+        // Setup
+        let printer = Printer::empty();
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h]
+
+options:
+ -h, --help  Show this help message and exit."#
+        );
+    }
+
+    #[test]
+    fn print_help_option() {
+        // Setup
+        let printer = Printer::new(
+            vec![(
+                "flag".to_string(),
+                Some('f'),
+                Nargs::Precisely(1),
+                Some("message"),
+            )],
+            Vec::default(),
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [-f FLAG]
+
+options:
+ -h, --help            Show this help message and exit.
+ -f FLAG, --flag FLAG  message"#
+        );
+    }
+
+    #[test]
+    fn print_help_option_precisely0() {
+        // Setup
+        let printer = Printer::new(
+            vec![("flag".to_string(), None, Nargs::Precisely(0), None)],
+            Vec::default(),
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [--flag]
+
+options:
+ -h, --help  Show this help message and exit.
+ --flag    "#
+        );
+    }
+
+    #[test]
+    fn print_help_option_precisely2() {
+        // Setup
+        let printer = Printer::new(
+            vec![("flag".to_string(), None, Nargs::Precisely(2), None)],
+            Vec::default(),
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [--flag FLAG FLAG]
+
+options:
+ -h, --help        Show this help message and exit.
+ --flag FLAG FLAG"#
+        );
+    }
+
+    #[test]
+    fn print_help_option_atleastone() {
+        // Setup
+        let printer = Printer::new(
+            vec![("flag".to_string(), None, Nargs::AtLeastOne, None)],
+            Vec::default(),
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [--flag FLAG [...]]
+
+options:
+ -h, --help         Show this help message and exit.
+ --flag FLAG [...]"#
+        );
+    }
+
+    #[test]
+    fn print_help_option_any() {
+        // Setup
+        let printer = Printer::new(
+            vec![("flag".to_string(), None, Nargs::Any, None)],
+            Vec::default(),
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [--flag [FLAG ...]]
+
+options:
+ -h, --help         Show this help message and exit.
+ --flag [FLAG ...]"#
+        );
+    }
+
+    #[test]
+    fn print_help_argument() {
+        // Setup
+        let printer = Printer::new(
+            Vec::default(),
+            vec![("name".to_string(), Nargs::Precisely(1), Some("message"))],
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] NAME
+
+positional arguments:
+ NAME        message
+
+options:
+ -h, --help  Show this help message and exit."#
+        );
+    }
+
+    #[test]
+    fn print_help_argument_precisely2() {
+        // Setup
+        let printer = Printer::new(
+            Vec::default(),
+            vec![("name".to_string(), Nargs::Precisely(2), None)],
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] NAME NAME
+
+positional arguments:
+ NAME NAME 
+
+options:
+ -h, --help  Show this help message and exit."#
+        );
+    }
+
+    #[test]
+    fn print_help_argument_atleastone() {
+        // Setup
+        let printer = Printer::new(
+            Vec::default(),
+            vec![("name".to_string(), Nargs::AtLeastOne, None)],
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] NAME [...]
+
+positional arguments:
+ NAME [...]
+
+options:
+ -h, --help  Show this help message and exit."#
+        );
+    }
+
+    #[test]
+    fn print_help_argument_any() {
+        // Setup
+        let printer = Printer::new(Vec::default(), vec![("name".to_string(), Nargs::Any, None)]);
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [NAME ...]
+
+positional arguments:
+ [NAME ...]
+
+options:
+ -h, --help  Show this help message and exit."#
+        );
+    }
+
+    #[test]
+    fn print_help() {
+        // Setup
+        let printer = Printer::new(
+            vec![
+                (
+                    "car".to_string(),
+                    Some('x'),
+                    Nargs::Any,
+                    Some("car message"),
+                ),
+                (
+                    "blue".to_string(),
+                    Some('y'),
+                    Nargs::Precisely(0),
+                    Some("blue message"),
+                ),
+                (
+                    "apple".to_string(),
+                    Some('z'),
+                    Nargs::Precisely(1),
+                    Some("apple message"),
+                ),
+            ],
+            vec![
+                (
+                    "name".to_string(),
+                    Nargs::Precisely(1),
+                    Some("name message"),
+                ),
+                ("items".to_string(), Nargs::Any, Some("items message")),
+            ],
+        );
+        let interface = InMemoryInterface::default();
+
+        // Execute
+        printer.print_help("program", &interface);
+
+        // Verify
+        let message = interface.consume_message();
+        assert_eq!(
+            message,
+            r#"usage: program [-h] [-z APPLE] [-y] [-x [CAR ...]] NAME [ITEMS ...]
+
+positional arguments:
+ NAME                           name message
+ [ITEMS ...]                    items message
+
+options:
+ -h, --help                     Show this help message and exit.
+ -z APPLE, --apple APPLE        apple message
+ -y, --blue                     blue message
+ -x [CAR ...], --car [CAR ...]  car message"#
+        );
     }
 }

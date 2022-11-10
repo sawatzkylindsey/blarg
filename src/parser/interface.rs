@@ -63,7 +63,7 @@ pub(crate) mod util {
     use std::sync::mpsc;
 
     pub(crate) struct InMemoryInterface {
-        message: RefCell<Option<String>>,
+        message: RefCell<Option<Vec<String>>>,
         error: RefCell<Option<String>>,
         error_context: RefCell<Option<(usize, Vec<String>)>>,
     }
@@ -84,9 +84,9 @@ pub(crate) mod util {
             let mut output = self.message.borrow_mut();
 
             if output.is_some() {
-                (*output).as_mut().unwrap().push_str(&message);
+                (*output).as_mut().unwrap().push(message);
             } else {
-                (*output).replace(message);
+                (*output).replace(vec![message]);
             }
         }
 
@@ -112,12 +112,19 @@ pub(crate) mod util {
             } = self;
 
             (
-                message.take(),
+                message.take().map(|messages| messages.join("\n")),
                 error.take(),
                 error_context
                     .take()
                     .map(|(offset, tokens)| (offset, tokens.join(" "))),
             )
+        }
+
+        pub(crate) fn consume_message(self) -> String {
+            let (message, error, error_context) = self.consume();
+            assert_eq!(error, None);
+            assert_eq!(error_context, None);
+            message.unwrap()
         }
     }
 
