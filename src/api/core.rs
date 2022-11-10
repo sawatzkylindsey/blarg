@@ -9,7 +9,7 @@ use crate::parser::{
     AnonymousCapturable, ArgumentCapture, ArgumentParameter, ConfigError, OptionCapture,
     OptionParameter, ParseError, ParseUnit, Parser, Printer,
 };
-use crate::parser::{Console, GeneralParser};
+use crate::parser::{ConsoleInterface, GeneralParser};
 
 enum ParameterInner<'ap, T> {
     Opt {
@@ -211,7 +211,7 @@ impl<'ap> CommandParser<'ap> {
         Ok(GeneralParser::command(
             self.program,
             command,
-            Box::new(Console::default()),
+            Box::new(ConsoleInterface::default()),
         ))
     }
 }
@@ -266,7 +266,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
             self.root.program,
             command,
             sub_commands,
-            Box::new(Console::default()),
+            Box::new(ConsoleInterface::default()),
         ))
     }
 }

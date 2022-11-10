@@ -41,8 +41,8 @@ There are two common re-design patterns:
 ### Blarg Api
 The `blarg` Api is a work in progress.
 In principle, we provide a reasonably idiomatic and type-safe interface for the above CLI paradigm.
-It should be straightforward to program arguments, options and sub-comands with the mentioned semantics.
-On the other hand, semantics outside of the CLI paradigm should be difficult/impossible within the `blarg` Api.
+It should be straightforward to program arguments, options and sub-commands with the mentioned semantics.
+On the other hand, semantics outside the CLI paradigm should be difficult/impossible within the `blarg` Api.
 For example, the `blarg` Api does not allow for a required parameter to be specified via option syntax.
 
 ### Api Grammar
@@ -99,4 +99,3 @@ For example, `-abc=123` is equivalent to `--apple --banana --carrot=123`.
     cargo test
 
     ./target/debug/examples/reducer -h
-

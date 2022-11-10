@@ -136,7 +136,16 @@ impl<'ap> GeneralParser<'ap> {
                     None => {
                         // The variant isn't amongst the sub-commands.
                         // Either the user specified an invalid variant, OR
-                        // the program invalidates the 'Display' inverse-to 'FromStr' / 'FromStr' inverse-to 'Display' requirement.
+                        // the program invalidates the 'Display'-'FromStr' requirement, stated as follows:
+                        //    ∀(s, T::S), T::from(s) == T::S ⟹ T::S.to_string() == s
+                        //
+                        // Or stated equivalently in code:
+                        // ```
+                        // let s = "string";
+                        // if let Ok(S) = T::from_str(s) {
+                        //     assert_eq!(S.to_string(), s.to_string());
+                        // }
+                        // ```
                         self.user_interface
                             .print_error(ParseError(format!("Unknown sub-command '{variant}'.")));
                         self.user_interface
@@ -171,58 +180,9 @@ mod tests {
     use super::*;
     use crate::api::{AnonymousCapture, GenericCapturable, Scalar};
     use crate::matcher::{ArgumentConfig, Bound, OptionConfig};
-    use crate::parser::InMemory;
+    use crate::parser::util::{channel_interface, InMemoryInterface};
+    use crate::test::assert_contains;
     use rstest::rstest;
-
-    #[test]
-    fn invoke_empty() {
-        // Setup
-        let parse_unit = ParseUnit::empty();
-        let interface = InMemory::default();
-
-        // Execute
-        let result = parse_unit.invoke(empty::slice(), "program", &interface);
-
-        // Verify
-        assert_eq!(result, ParseResult::Complete);
-        assert!((*interface.message.borrow()).is_none());
-        assert!((*interface.error.borrow()).is_none());
-        assert_eq!((*interface.error_context.borrow()), None);
-    }
-
-    #[rstest]
-    #[case(vec!["1"])]
-    #[case(vec!["01"])]
-    #[case(vec!["--flag", "1"])]
-    fn invoke(#[case] tokens: Vec<&str>) {
-        // Setup
-        let mut variable: u32 = 0;
-        let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
-        let capture = AnonymousCapture::bind(generic_capture);
-        let parse_unit = ParseUnit::new(
-            Parser::new(
-                vec![(
-                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
-                    Box::new(BlackHole::default()),
-                )],
-                vec![(config, Box::new(capture))],
-                None,
-            )
-            .unwrap(),
-            Printer::empty(),
-        );
-        let interface = InMemory::default();
-
-        // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
-
-        // Verify
-        assert_eq!(result, ParseResult::Complete);
-        assert!((*interface.message.borrow()).is_none());
-        assert!((*interface.error.borrow()).is_none());
-        assert_eq!((*interface.error_context.borrow()), None);
-    }
 
     #[rstest]
     #[case(vec!["1"], 0, "1", vec![])]
@@ -231,9 +191,9 @@ mod tests {
     #[case(vec!["1", "a"], 0, "1", vec!["a"])]
     #[case(vec!["01", "a"], 0, "01", vec!["a"])]
     #[case(vec!["--flag", "1", "a"], 6, "1", vec!["a"])]
-    #[case(vec!["1", "a", "--b=123"], 0, "1", vec!["a", "--b=123"])]
-    #[case(vec!["01", "a", "--b=123"], 0, "01", vec!["a", "--b=123"])]
-    #[case(vec!["--flag", "1", "a", "--b=123"], 6, "1", vec!["a", "--b=123"])]
+    #[case(vec!["1", "a", "--abc=123"], 0, "1", vec!["a", "--abc=123"])]
+    #[case(vec!["01", "a", "--abc=123"], 0, "01", vec!["a", "--abc=123"])]
+    #[case(vec!["--flag", "1", "a", "--abc=123"], 6, "1", vec!["a", "--abc=123"])]
     fn invoke_discriminator(
         #[case] tokens: Vec<&str>,
         #[case] offset: usize,
@@ -241,23 +201,20 @@ mod tests {
         #[case] remaining: Vec<&str>,
     ) {
         // Setup
-        let mut variable: u32 = 0;
-        let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
-        let capture = AnonymousCapture::bind(generic_capture);
+        let config = ArgumentConfig::new("variable", Bound::Range(1, 1));
         let parse_unit = ParseUnit::new(
             Parser::new(
                 vec![(
                     OptionConfig::new("flag", None, Bound::Range(0, 0)),
                     Box::new(BlackHole::default()),
                 )],
-                vec![(config, Box::new(capture))],
+                vec![(config, Box::new(BlackHole::default()))],
                 Some("variable".to_string()),
             )
             .unwrap(),
             Printer::empty(),
         );
-        let interface = InMemory::default();
+        let interface = InMemoryInterface::default();
 
         // Execute
         let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
@@ -271,93 +228,374 @@ mod tests {
                 remaining: remaining.into_iter().map(|s| s.to_string()).collect(),
             }
         );
-        assert!((*interface.message.borrow()).is_none());
-        assert!((*interface.error.borrow()).is_none());
-        assert_eq!((*interface.error_context.borrow()), None);
-    }
 
-    #[rstest]
-    #[case(vec!["--help"])]
-    #[case(vec!["-h"])]
-    fn invoke_help(#[case] tokens: Vec<&str>) {
-        // Setup
-        let parse_unit = ParseUnit::empty();
-        let interface = InMemory::default();
-
-        // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
-
-        // Verify
-        assert_eq!(result, ParseResult::Exit(0));
-
-        assert!((*interface.message.borrow())
-            .as_ref()
-            .unwrap()
-            .contains("-h, --help"));
-        assert!((*interface.error.borrow()).is_none());
-        assert_eq!((*interface.error_context.borrow()), None);
+        let (message, error, error_context) = interface.consume();
+        assert_eq!(message, None);
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
     }
 
     #[test]
-    fn invoke_argument_unmatched() {
+    fn parse_tokens_empty() {
         // Setup
-        let parse_unit = ParseUnit::empty();
-        let interface = InMemory::default();
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::command("program", ParseUnit::empty(), Box::new(sender));
 
         // Execute
-        let result = parse_unit.invoke(&["unmatched"], "program", &interface);
+        general_parser.parse_tokens(empty::slice()).unwrap();
 
         // Verify
-        assert_eq!(result, ParseResult::Exit(1));
-
-        assert!((*interface.message.borrow()).is_none());
-        assert!((*interface.error.borrow())
-            .as_ref()
-            .unwrap()
-            .contains("Parse error"));
-        assert_eq!(
-            (*interface.error_context.borrow()).as_ref().unwrap(),
-            &(0, vec!["unmatched".to_string()])
-        );
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
     }
 
     #[rstest]
-    #[case(vec!["not-u32"], 0)]
-    #[case(vec!["--flag", "not-u32"], 6)]
-    fn invoke_argument_inconvertable(#[case] tokens: Vec<&str>, #[case] offset: usize) {
+    #[case(vec!["1"])]
+    #[case(vec!["01"])]
+    #[case(vec!["--flag", "1"])]
+    fn parse_tokens(#[case] tokens: Vec<&str>) {
         // Setup
-        let mut variable: u32 = 0;
-        let generic_capture = Scalar::new(&mut variable);
-        let config = ArgumentConfig::new("variable", generic_capture.nargs().into());
-        let capture = AnonymousCapture::bind(generic_capture);
         let parse_unit = ParseUnit::new(
             Parser::new(
                 vec![(
                     OptionConfig::new("flag", None, Bound::Range(0, 0)),
                     Box::new(BlackHole::default()),
                 )],
-                vec![(config, Box::new(capture))],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
                 None,
             )
             .unwrap(),
             Printer::empty(),
         );
-        let interface = InMemory::default();
+        let (sender, receiver) = channel_interface();
+        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
+        general_parser.parse_tokens(tokens.as_slice()).unwrap();
 
         // Verify
-        assert_eq!(result, ParseResult::Exit(1));
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
+    }
 
-        assert!((*interface.message.borrow()).is_none());
-        assert!((*interface.error.borrow())
-            .as_ref()
-            .unwrap()
-            .contains("Parse error"));
+    #[rstest]
+    #[case(vec!["--help"])]
+    #[case(vec!["-h"])]
+    fn parse_tokens_help(#[case] tokens: Vec<&str>) {
+        // Setup
+        let parse_unit = ParseUnit::empty();
+        let (sender, receiver) = channel_interface();
+        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 0);
+
+        let (message, error, error_context) = receiver.consume();
+        let message = message.unwrap();
+        assert_contains!(message, "usage: program [-h]");
+        assert_contains!(message, "-h, --help");
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
+    }
+
+    #[rstest]
+    #[case(vec!["not-u32"], 0)]
+    #[case(vec!["--flag", "not-u32"], 6)]
+    fn parse_tokens_argument_inconvertable(#[case] tokens: Vec<&str>, #[case] offset: usize) {
+        // Setup
+        let mut variable: u32 = 0;
+        let generic_capture = Scalar::new(&mut variable);
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", generic_capture.nargs().into()),
+                    Box::new(AnonymousCapture::bind(generic_capture)),
+                )],
+                None,
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let (sender, receiver) = channel_interface();
+        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 1);
+
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        let error = error.unwrap();
+        assert_contains!(error, "Parse error");
         assert_eq!(
-            (*interface.error_context.borrow()).as_ref().unwrap(),
-            &(offset, tokens.into_iter().map(|s| s.to_string()).collect())
+            error_context.unwrap(),
+            (
+                offset,
+                tokens
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            )
+        );
+    }
+
+    #[rstest]
+    #[case(vec!["1"])]
+    #[case(vec!["--flag", "1"])]
+    fn sub_command_empty(#[case] tokens: Vec<&str>) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let sub_commands = HashMap::from([("1".to_string(), ParseUnit::empty())]);
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        general_parser.parse_tokens(tokens.as_slice()).unwrap();
+
+        // Verify
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
+    }
+
+    #[rstest]
+    #[case(vec!["1", "a"])]
+    #[case(vec!["--flag", "1", "a"])]
+    #[case(vec!["1", "a", "--abc=123"])]
+    #[case(vec!["--flag", "1", "a", "--abc=123"])]
+    fn sub_command(#[case] tokens: Vec<&str>) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let sub_commands = HashMap::from([(
+            "1".to_string(),
+            ParseUnit::new(
+                Parser::new(
+                    vec![(
+                        OptionConfig::new("abc", None, Bound::Range(1, 1)),
+                        Box::new(BlackHole::default()),
+                    )],
+                    vec![(
+                        ArgumentConfig::new("item", Bound::Range(1, 1)),
+                        Box::new(BlackHole::default()),
+                    )],
+                    None,
+                )
+                .unwrap(),
+                Printer::empty(),
+            ),
+        )]);
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        general_parser.parse_tokens(tokens.as_slice()).unwrap();
+
+        // Verify
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
+    }
+
+    #[rstest]
+    #[case(vec!["1", "--help"])]
+    #[case(vec!["--flag", "1", "--help"])]
+    #[case(vec!["1", "-h"])]
+    #[case(vec!["--flag", "1", "-h"])]
+    fn sub_command_help(#[case] tokens: Vec<&str>) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let sub_commands = HashMap::from([("1".to_string(), ParseUnit::empty())]);
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 0);
+
+        let (message, error, error_context) = receiver.consume();
+        let message = message.unwrap();
+        assert_contains!(message, "usage: program 1 [-h]");
+        assert_contains!(message, "-h, --help");
+        assert_eq!(error, None);
+        assert_eq!(error_context, None);
+    }
+
+    #[rstest]
+    #[case(vec!["1", "not-u32"], 0, "not-u32")]
+    #[case(vec!["--flag", "1", "not-u32"], 0, "not-u32")]
+    #[case(vec!["1", "--abc=123", "not-u32"], 9, "--abc=123 not-u32")]
+    #[case(vec!["--flag", "1", "--abc=123", "not-u32"], 9, "--abc=123 not-u32")]
+    fn sub_command_inconvertable(
+        #[case] tokens: Vec<&str>,
+        #[case] offset: usize,
+        #[case] context: &str,
+    ) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let mut item: u32 = 0;
+        let generic_capture = Scalar::new(&mut item);
+        let sub_commands = HashMap::from([(
+            "1".to_string(),
+            ParseUnit::new(
+                Parser::new(
+                    vec![(
+                        OptionConfig::new("abc", None, Bound::Range(1, 1)),
+                        Box::new(BlackHole::default()),
+                    )],
+                    vec![(
+                        ArgumentConfig::new("item", generic_capture.nargs().into()),
+                        Box::new(AnonymousCapture::bind(generic_capture)),
+                    )],
+                    None,
+                )
+                .unwrap(),
+                Printer::empty(),
+            ),
+        )]);
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 1);
+
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        let error = error.unwrap();
+        assert_contains!(error, "Parse error");
+        assert_eq!(error_context.unwrap(), (offset, context.to_string()));
+    }
+
+    #[rstest]
+    #[case(vec!["1"], 0)]
+    #[case(vec!["01"], 0)]
+    #[case(vec!["--flag", "1"], 6)]
+    fn sub_command_not_found(#[case] tokens: Vec<&str>, #[case] offset: usize) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let sub_commands = HashMap::default();
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 1);
+
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        let error = error.unwrap();
+        assert_contains!(error, "Unknown sub-command");
+        assert_eq!(
+            error_context.unwrap(),
+            (
+                offset,
+                tokens
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" ")
+            )
         );
     }
 }
