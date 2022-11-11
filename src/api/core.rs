@@ -27,6 +27,59 @@ enum ParameterInner<'ap, T> {
     },
 }
 
+impl<'ap, T> std::fmt::Debug for ParameterInner<'ap, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ParameterInner::Opt {
+                nargs,
+                name,
+                short,
+                description,
+                ..
+            } => {
+                let description = if let Some(d) = description {
+                    format!(", {d}")
+                } else {
+                    "".to_string()
+                };
+                match short {
+                    Some(s) => {
+                        write!(
+                            f,
+                            "Opt[{t}, {nargs}, --{name}, -{s}{description}]",
+                            t = std::any::type_name::<T>()
+                        )
+                    }
+                    None => {
+                        write!(
+                            f,
+                            "Opt[{t}, {nargs}, --{name}{description}]",
+                            t = std::any::type_name::<T>()
+                        )
+                    }
+                }
+            }
+            ParameterInner::Arg {
+                nargs,
+                name,
+                description,
+                ..
+            } => {
+                let description = if let Some(d) = description {
+                    format!(", {d}")
+                } else {
+                    "".to_string()
+                };
+                write!(
+                    f,
+                    "Arg[{t}, {nargs}, {name}, {description}]",
+                    t = std::any::type_name::<T>()
+                )
+            }
+        }
+    }
+}
+
 pub struct Condition<'ap, T> {
     arg_parameter: Parameter<'ap, T>,
 }
@@ -268,5 +321,254 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
             sub_commands,
             Box::new(ConsoleInterface::default()),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    #[test]
+    fn option() {
+        let mut flag: bool = false;
+        let option = Parameter::option(Switch::new(&mut flag, true), "flag", None);
+
+        assert_matches!(option.0, ParameterInner::Opt {
+            name,
+            short,
+            description,
+            ..
+        } =>
+        {
+            assert_eq!(name, "flag");
+            assert_eq!(short, None);
+            assert_eq!(description, None);
+        });
+    }
+
+    #[test]
+    fn option_short() {
+        let mut flag: bool = false;
+        let option = Parameter::option(Switch::new(&mut flag, true), "flag", Some('f'));
+
+        assert_matches!(option.0, ParameterInner::Opt {
+            name,
+            short,
+            description,
+            ..
+        } =>
+        {
+            assert_eq!(name, "flag");
+            assert_eq!(short, Some('f'));
+            assert_eq!(description, None);
+        });
+    }
+
+    #[test]
+    fn option_help() {
+        let mut flag: bool = false;
+        let option =
+            Parameter::option(Switch::new(&mut flag, true), "flag", None).help("help message");
+
+        assert_matches!(option.0, ParameterInner::Opt {
+            name,
+            short,
+            description,
+            ..
+        } =>
+        {
+            assert_eq!(name, "flag");
+            assert_eq!(short, None);
+            assert_eq!(description, Some("help message"));
+        });
+    }
+
+    #[test]
+    fn argument() {
+        let mut item: bool = false;
+        let option = Parameter::argument(Scalar::new(&mut item), "item");
+
+        assert_matches!(option.0, ParameterInner::Arg {
+            name,
+            description,
+            ..
+        } =>
+        {
+            assert_eq!(name, "item");
+            assert_eq!(description, None);
+        });
+    }
+
+    #[test]
+    fn argument_help() {
+        let mut item: bool = false;
+        let option = Parameter::argument(Scalar::new(&mut item), "item").help("help message");
+
+        assert_matches!(option.0, ParameterInner::Arg {
+            name,
+            description,
+            ..
+        } =>
+        {
+            assert_eq!(name, "item");
+            assert_eq!(description, Some("help message"));
+        });
+    }
+
+    #[test]
+    fn build_empty() {
+        // Setup
+        let ap = CommandParser::new("program");
+
+        // Execute
+        let parser = ap.build().unwrap();
+
+        // Verify
+        parser.parse_tokens(empty::slice()).unwrap();
+    }
+
+    #[rstest]
+    #[case(vec![], false, vec![])]
+    #[case(vec!["1"], false, vec![1])]
+    #[case(vec!["01"], false, vec![1])]
+    #[case(vec!["1", "3", "2"], false, vec![1, 3, 2])]
+    #[case(vec!["--flag"], true, vec![])]
+    #[case(vec!["--flag", "1"], true, vec![1])]
+    #[case(vec!["--flag", "01"], true, vec![1])]
+    #[case(vec!["--flag", "1", "3", "2"], true, vec![1, 3, 2])]
+    fn build(
+        #[case] tokens: Vec<&str>,
+        #[case] expected_flag: bool,
+        #[case] expected_items: Vec<u32>,
+    ) {
+        // Setup
+        let mut flag: bool = false;
+        let mut items: Vec<u32> = Vec::default();
+        let mut cp = CommandParser::new("program");
+        cp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .add(Parameter::argument(
+                Collection::new(&mut items, Nargs::Any),
+                "item",
+            ));
+
+        // Execute
+        let parser = cp.build().unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with the various permutations.
+        parser.parse_tokens(tokens.as_slice()).unwrap();
+        assert_eq!(flag, expected_flag);
+        assert_eq!(items, expected_items);
+    }
+
+    #[rstest]
+    #[case(vec!["0"], false, 0, vec![], vec![])]
+    #[case(vec!["0", "1"], false, 0, vec![1], vec![])]
+    #[case(vec!["0", "1", "3", "2"], false, 0, vec![1, 3, 2], vec![])]
+    #[case(vec!["1"], false, 1, vec![], vec![])]
+    #[case(vec!["1", "1"], false, 1, vec![], vec![1])]
+    #[case(vec!["1", "1", "3", "2"], false, 1, vec![], vec![1, 3, 2])]
+    #[case(vec!["--flag", "0"], true, 0, vec![], vec![])]
+    #[case(vec!["--flag", "0", "1"], true, 0, vec![1], vec![])]
+    #[case(vec!["--flag", "0", "1", "3", "2"], true, 0, vec![1, 3, 2], vec![])]
+    #[case(vec!["--flag", "1"], true, 1, vec![], vec![])]
+    #[case(vec!["--flag", "1", "1"], true, 1, vec![], vec![1])]
+    #[case(vec!["--flag", "1", "1", "3", "2"], true, 1, vec![], vec![1, 3, 2])]
+    fn branch_build(
+        #[case] tokens: Vec<&str>,
+        #[case] expected_flag: bool,
+        #[case] expected_sub: u32,
+        #[case] expected_items_0: Vec<u32>,
+        #[case] expected_items_1: Vec<u32>,
+    ) {
+        // Setup
+        let mut flag: bool = false;
+        let mut sub: u32 = 0;
+        let mut items_0: Vec<u32> = Vec::default();
+        let mut items_1: Vec<u32> = Vec::default();
+        let cp = CommandParser::new("program");
+        let scp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
+            .add(
+                0,
+                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item"),
+            )
+            .add(
+                1,
+                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item"),
+            );
+
+        // Execute
+        let parser = scp.build().unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with the various permutations.
+        parser.parse_tokens(tokens.as_slice()).unwrap();
+        assert_eq!(flag, expected_flag);
+        assert_eq!(sub, expected_sub);
+        assert_eq!(items_0, expected_items_0);
+        assert_eq!(items_1, expected_items_1);
+    }
+
+    #[rstest]
+    #[case(vec!["abc", "0"], false, "abc", 0, vec![])]
+    #[case(vec!["abc", "0", "1"], false, "abc", 0, vec![1])]
+    #[case(vec!["abc", "0", "1", "3", "2"], false, "abc", 0, vec![1, 3, 2])]
+    #[case(vec!["--flag", "abc", "0"], true, "abc", 0, vec![])]
+    #[case(vec!["--flag", "abc", "0", "1"], true, "abc", 0, vec![1])]
+    #[case(vec!["--flag", "abc", "0", "1", "3", "2"], true, "abc", 0, vec![1, 3, 2])]
+    #[case(vec!["abc", "--flag", "0"], true, "abc", 0, vec![])]
+    #[case(vec!["abc", "--flag", "0", "1"], true, "abc", 0, vec![1])]
+    #[case(vec!["abc", "--flag", "0", "1", "3", "2"], true, "abc", 0, vec![1, 3, 2])]
+    fn root_arguments_branch_build(
+        #[case] tokens: Vec<&str>,
+        #[case] expected_flag: bool,
+        #[case] expected_root: &str,
+        #[case] expected_sub: u32,
+        #[case] expected_items: Vec<u32>,
+    ) {
+        // Setup
+        let mut flag: bool = false;
+        let mut root: String = String::default();
+        let mut sub: u32 = 0;
+        let mut items: Vec<u32> = Vec::default();
+        let cp = CommandParser::new("program");
+        let scp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .add(Parameter::argument(Scalar::new(&mut root), "root"))
+            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
+            .add(
+                0,
+                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item"),
+            );
+
+        // Execute
+        let parser = scp.build().unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with the various permutations.
+        parser.parse_tokens(tokens.as_slice()).unwrap();
+        assert_eq!(flag, expected_flag);
+        assert_eq!(&root, expected_root);
+        assert_eq!(sub, expected_sub);
+        assert_eq!(items, expected_items);
     }
 }

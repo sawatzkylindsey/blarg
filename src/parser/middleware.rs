@@ -102,7 +102,7 @@ enum ParseResult {
 }
 
 impl<'ap> GeneralParser<'ap> {
-    fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
+    pub(crate) fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
         let command_result =
             self.command
                 .invoke(tokens, self.program.clone(), &*self.user_interface);
