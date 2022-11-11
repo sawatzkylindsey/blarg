@@ -4,6 +4,7 @@ use std::env;
 use crate::parser::base::*;
 use crate::parser::interface::UserInterface;
 use crate::parser::printer::Printer;
+use crate::parser::ErrorContext;
 
 pub struct GeneralParser<'ap> {
     program: String,
@@ -82,7 +83,7 @@ impl<'ap> ParseUnit<'ap> {
             }
             Err((offset, parse_error)) => {
                 user_interface.print_error(parse_error);
-                user_interface.print_error_context(offset, tokens);
+                user_interface.print_error_context(ErrorContext::new(offset, tokens));
                 ParseResult::Exit(1)
             }
         }
@@ -149,7 +150,7 @@ impl<'ap> GeneralParser<'ap> {
                         self.user_interface
                             .print_error(ParseError(format!("Unknown sub-command '{variant}'.")));
                         self.user_interface
-                            .print_error_context(variant_offset, tokens);
+                            .print_error_context(ErrorContext::new(variant_offset, tokens));
                         Err(1)
                     }
                 }
@@ -180,6 +181,7 @@ mod tests {
     use super::*;
     use crate::api::{AnonymousCapture, GenericCapturable, Scalar};
     use crate::matcher::{ArgumentConfig, Bound, OptionConfig};
+    use crate::parser::test::BlackHole;
     use crate::parser::util::{channel_interface, InMemoryInterface};
     use crate::test::assert_contains;
     use rstest::rstest;
@@ -344,17 +346,8 @@ mod tests {
         assert_eq!(message, None);
         let error = error.unwrap();
         assert_contains!(error, "Parse error");
-        assert_eq!(
-            error_context.unwrap(),
-            (
-                offset,
-                tokens
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            )
-        );
+        let error_context = error_context.unwrap();
+        assert_eq!(error_context, ErrorContext::new(offset, &tokens));
     }
 
     #[rstest]
@@ -488,14 +481,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec!["1", "not-u32"], 0, "not-u32")]
-    #[case(vec!["--flag", "1", "not-u32"], 0, "not-u32")]
-    #[case(vec!["1", "--abc=123", "not-u32"], 9, "--abc=123 not-u32")]
-    #[case(vec!["--flag", "1", "--abc=123", "not-u32"], 9, "--abc=123 not-u32")]
+    #[case(vec!["1", "not-u32"], 0, vec!["not-u32"])]
+    #[case(vec!["--flag", "1", "not-u32"], 0, vec!["not-u32"])]
+    #[case(vec!["1", "--abc=123", "not-u32"], 9, vec!["--abc=123", "not-u32"])]
+    #[case(vec!["--flag", "1", "--abc=123", "not-u32"], 9, vec!["--abc=123", "not-u32"])]
     fn sub_command_inconvertable(
         #[case] tokens: Vec<&str>,
         #[case] offset: usize,
-        #[case] context: &str,
+        #[case] context: Vec<&str>,
     ) {
         // Setup
         let parse_unit = ParseUnit::new(
@@ -547,7 +540,8 @@ mod tests {
         assert_eq!(message, None);
         let error = error.unwrap();
         assert_contains!(error, "Parse error");
-        assert_eq!(error_context.unwrap(), (offset, context.to_string()));
+        let error_context = error_context.unwrap();
+        assert_eq!(error_context, ErrorContext::new(offset, &context));
     }
 
     #[rstest]
@@ -586,16 +580,7 @@ mod tests {
         assert_eq!(message, None);
         let error = error.unwrap();
         assert_contains!(error, "Unknown sub-command");
-        assert_eq!(
-            error_context.unwrap(),
-            (
-                offset,
-                tokens
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>()
-                    .join(" ")
-            )
-        );
+        let error_context = error_context.unwrap();
+        assert_eq!(error_context, ErrorContext::new(offset, &tokens));
     }
 }

@@ -1,9 +1,10 @@
 use crate::parser::base::ParseError;
+use crate::parser::ErrorContext;
 
 pub(crate) trait UserInterface {
     fn print(&self, message: String);
     fn print_error(&self, error: ParseError);
-    fn print_error_context(&self, offset: usize, tokens: &[&str]);
+    fn print_error_context(&self, error_context: ErrorContext);
 }
 
 pub(crate) struct ConsoleInterface {}
@@ -23,49 +24,21 @@ impl UserInterface for ConsoleInterface {
         eprintln!("{error}");
     }
 
-    fn print_error_context(&self, offset: usize, tokens: &[&str]) {
-        let mut token_length = 0;
-        let mut representation = String::default();
-        let mut offset_spaces: Option<usize> = None;
-
-        for (i, token) in tokens.iter().enumerate() {
-            if offset_spaces.is_none() {
-                if token_length >= offset {
-                    offset_spaces.replace(i + 1);
-                }
-            }
-
-            token_length += token.len();
-            representation.push_str(token);
-
-            if i < tokens.len() {
-                representation.push_str(" ");
-            }
-        }
-
-        if offset_spaces.is_none() {
-            offset_spaces.replace(tokens.len());
-        }
-
-        eprintln!("{representation}");
-        eprintln!(
-            "{:>width$}",
-            "^",
-            width = offset + offset_spaces.expect("internal error - must have set offset_spaces")
-        );
+    fn print_error_context(&self, error_context: ErrorContext) {
+        eprintln!("{error_context}");
     }
 }
 
 #[cfg(test)]
 pub(crate) mod util {
-    use crate::parser::{ParseError, UserInterface};
+    use crate::parser::{ErrorContext, ParseError, UserInterface};
     use std::cell::RefCell;
     use std::sync::mpsc;
 
     pub(crate) struct InMemoryInterface {
         message: RefCell<Option<Vec<String>>>,
         error: RefCell<Option<String>>,
-        error_context: RefCell<Option<(usize, Vec<String>)>>,
+        error_context: RefCell<Option<ErrorContext>>,
     }
 
     impl Default for InMemoryInterface {
@@ -95,16 +68,14 @@ pub(crate) mod util {
             self.error.borrow_mut().replace(error.to_string());
         }
 
-        fn print_error_context(&self, offset: usize, tokens: &[&str]) {
+        fn print_error_context(&self, error_context: ErrorContext) {
             // Assumes print_error_context() is only ever called once.
-            self.error_context
-                .borrow_mut()
-                .replace((offset, tokens.iter().map(|s| s.to_string()).collect()));
+            self.error_context.borrow_mut().replace(error_context);
         }
     }
 
     impl InMemoryInterface {
-        pub(crate) fn consume(self) -> (Option<String>, Option<String>, Option<(usize, String)>) {
+        pub(crate) fn consume(self) -> (Option<String>, Option<String>, Option<ErrorContext>) {
             let InMemoryInterface {
                 message,
                 error,
@@ -114,9 +85,7 @@ pub(crate) mod util {
             (
                 message.take().map(|messages| messages.join("\n")),
                 error.take(),
-                error_context
-                    .take()
-                    .map(|(offset, tokens)| (offset, tokens.join(" "))),
+                error_context.take(),
             )
         }
 
@@ -148,7 +117,7 @@ pub(crate) mod util {
     pub(crate) struct SenderInterface {
         message_tx: mpsc::Sender<Option<String>>,
         error_tx: mpsc::Sender<Option<String>>,
-        error_context_tx: mpsc::Sender<Option<(usize, Vec<String>)>>,
+        error_context_tx: mpsc::Sender<Option<ErrorContext>>,
     }
 
     impl Drop for SenderInterface {
@@ -170,25 +139,20 @@ pub(crate) mod util {
             self.error_tx.send(Some(error.to_string())).unwrap();
         }
 
-        fn print_error_context(&self, offset: usize, tokens: &[&str]) {
-            // Assumes print_error_context() is only ever called once, with the receiver only taking the last.
-            self.error_context_tx
-                .send(Some((
-                    offset,
-                    tokens.iter().map(|s| s.to_string()).collect(),
-                )))
-                .unwrap();
+        fn print_error_context(&self, error_context: ErrorContext) {
+            // Assumes print_error_context() is only ever called once, with the receiver only taking the first.
+            self.error_context_tx.send(Some(error_context)).unwrap();
         }
     }
 
     pub(crate) struct ReceiverInterface {
         message_rx: mpsc::Receiver<Option<String>>,
         error_rx: mpsc::Receiver<Option<String>>,
-        error_context_rx: mpsc::Receiver<Option<(usize, Vec<String>)>>,
+        error_context_rx: mpsc::Receiver<Option<ErrorContext>>,
     }
 
     impl ReceiverInterface {
-        pub(crate) fn consume(self) -> (Option<String>, Option<String>, Option<(usize, String)>) {
+        pub(crate) fn consume(self) -> (Option<String>, Option<String>, Option<ErrorContext>) {
             let ReceiverInterface {
                 message_rx,
                 error_rx,
@@ -198,11 +162,9 @@ pub(crate) mod util {
             (
                 drain(message_rx),
                 drain(error_rx),
-                // Assumes print_error_context() is only ever called once (aka: we take the last).
-                error_context_rx
-                    .recv()
-                    .unwrap()
-                    .map(|(offset, tokens)| (offset, tokens.join(" "))),
+                // Assumes print_error_context() is only ever called once
+                // (we take the first if multiple were sent on the channel).
+                error_context_rx.recv().unwrap(),
             )
         }
     }

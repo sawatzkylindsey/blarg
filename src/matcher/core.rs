@@ -255,17 +255,6 @@ impl TokenMatcher {
         }
 
         true
-
-        /*if self.arguments.is_empty() {
-            println!("args empty");
-                println!("buffer check..");
-            } else {
-                println!("no buffer check");
-                true
-            }
-        } else {
-            false
-        }*/
     }
 
     pub(crate) fn close(mut self) -> Result<Matches, (usize, MatchError, Matches)> {

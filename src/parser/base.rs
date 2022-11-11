@@ -45,22 +45,27 @@ pub(crate) trait AnonymousCapturable {
     fn capture(&mut self, value: &str) -> Result<(), ParseError>;
 }
 
-pub(crate) struct BlackHole {}
+#[cfg(test)]
+pub mod test {
+    use crate::parser::{AnonymousCapturable, ParseError};
 
-impl Default for BlackHole {
-    fn default() -> Self {
-        Self {}
+    pub(crate) struct BlackHole {}
+
+    impl Default for BlackHole {
+        fn default() -> Self {
+            Self {}
+        }
     }
-}
 
-impl AnonymousCapturable for BlackHole {
-    fn matched(&mut self) {
-        // Do nothing
-    }
+    impl AnonymousCapturable for BlackHole {
+        fn matched(&mut self) {
+            // Do nothing
+        }
 
-    fn capture(&mut self, _value: &str) -> Result<(), ParseError> {
-        // Do nothing
-        Ok(())
+        fn capture(&mut self, _value: &str) -> Result<(), ParseError> {
+            // Do nothing
+            Ok(())
+        }
     }
 }
 
@@ -221,6 +226,7 @@ mod tests {
     use super::*;
     use crate::api::{AnonymousCapture, Collection, GenericCapturable, Scalar};
     use crate::model::Nargs;
+    use crate::parser::base::test::BlackHole;
     use rand::{thread_rng, Rng};
     use rstest::rstest;
 

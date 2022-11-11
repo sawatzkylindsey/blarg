@@ -1,5 +1,3 @@
-use rand::{distributions::Standard, prelude::Distribution, Rng};
-
 use crate::matcher::MatchTokens;
 use crate::model::Nargs;
 
@@ -21,20 +19,26 @@ impl From<Nargs> for Bound {
     }
 }
 
-impl Distribution<Bound> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Bound {
-        match rng.gen_range(0..2) {
-            0 => {
-                let upper: u8 = rng.gen();
+#[cfg(test)]
+mod test {
+    use super::Bound;
+    use rand::{distributions::Standard, prelude::Distribution, Rng};
 
-                if upper == 0 {
-                    Bound::Range(0, upper)
-                } else {
-                    Bound::Range(rng.gen_range(0..upper), upper)
+    impl Distribution<Bound> for Standard {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Bound {
+            match rng.gen_range(0..2) {
+                0 => {
+                    let upper: u8 = rng.gen();
+
+                    if upper == 0 {
+                        Bound::Range(0, upper)
+                    } else {
+                        Bound::Range(rng.gen_range(0..upper), upper)
+                    }
                 }
+                1 => Bound::Lower(rng.gen()),
+                _ => unreachable!("internal error - impossible gen_range()"),
             }
-            1 => Bound::Lower(rng.gen()),
-            _ => unreachable!("internal error - impossible gen_range()"),
         }
     }
 }

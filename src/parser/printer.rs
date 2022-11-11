@@ -138,6 +138,49 @@ impl Printer {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ErrorContext {
+    offset: usize,
+    tokens: Vec<String>,
+}
+
+impl ErrorContext {
+    pub(crate) fn new(offset: usize, tokens: &[&str]) -> Self {
+        Self {
+            offset,
+            tokens: tokens.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+impl std::fmt::Display for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut tokens_length = 0;
+        let mut projection = String::default();
+        let mut projection_offset = 0;
+
+        for (i, token) in self.tokens.iter().enumerate() {
+            tokens_length += token.len();
+            projection.push_str(token);
+
+            if i + 1 < self.tokens.len() {
+                projection.push_str(" ");
+
+                if tokens_length <= self.offset {
+                    projection_offset += 1;
+                }
+            }
+        }
+
+        write!(
+            f,
+            "{projection}\n{:width$}^",
+            "",
+            width = std::cmp::min(self.offset, tokens_length.saturating_sub(1)) + projection_offset
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -442,6 +485,93 @@ options:
  -z APPLE, --apple APPLE        apple message
  -y, --blue                     blue message
  -x [CAR ...], --car [CAR ...]  car message"#
+        );
+    }
+
+    #[test]
+    fn error_context_tokens0() {
+        assert_eq!(
+            ErrorContext::new(0, &[]).to_string(),
+            r#"
+^"#
+        );
+        assert_eq!(
+            ErrorContext::new(1, &[]).to_string(),
+            r#"
+^"#
+        );
+        assert_eq!(
+            ErrorContext::new(2, &[]).to_string(),
+            r#"
+^"#
+        );
+        assert_eq!(
+            ErrorContext::new(3, &[]).to_string(),
+            r#"
+^"#
+        );
+    }
+
+    #[test]
+    fn error_context_tokens1() {
+        assert_eq!(
+            ErrorContext::new(0, &["abc"]).to_string(),
+            r#"abc
+^"#
+        );
+        assert_eq!(
+            ErrorContext::new(1, &["abc"]).to_string(),
+            r#"abc
+ ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(2, &["abc"]).to_string(),
+            r#"abc
+  ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(3, &["abc"]).to_string(),
+            r#"abc
+  ^"#
+        );
+    }
+
+    #[test]
+    fn error_context_tokens2() {
+        assert_eq!(
+            ErrorContext::new(0, &["abc", "123"]).to_string(),
+            r#"abc 123
+^"#
+        );
+        assert_eq!(
+            ErrorContext::new(1, &["abc", "123"]).to_string(),
+            r#"abc 123
+ ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(2, &["abc", "123"]).to_string(),
+            r#"abc 123
+  ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(3, &["abc", "123"]).to_string(),
+            r#"abc 123
+    ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(4, &["abc", "123"]).to_string(),
+            r#"abc 123
+     ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(5, &["abc", "123"]).to_string(),
+            r#"abc 123
+      ^"#
+        );
+        assert_eq!(
+            ErrorContext::new(6, &["abc", "123"]).to_string(),
+            r#"abc 123
+      ^"#
         );
     }
 }
