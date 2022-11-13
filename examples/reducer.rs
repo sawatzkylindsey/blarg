@@ -10,6 +10,15 @@ enum Operand {
     Multiply,
 }
 
+impl std::fmt::Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Operand::Add => write!(f, "add"),
+            Operand::Multiply => write!(f, "multiply"),
+        }
+    }
+}
+
 impl FromStr for Operand {
     type Err = String;
 
@@ -53,11 +62,12 @@ fn main() {
             Parameter::option(Switch::new(&mut _verbose, true), "verbose", Some('v'))
                 .help("Do dee doo."),
         )
-        .add(Parameter::option(
-            Scalar::new(&mut operand),
-            "operand",
-            Some('o'),
-        ))
+        .add(
+            Parameter::option(Scalar::new(&mut operand), "operand", Some('o'))
+                .help("moot")
+                .choice(Operand::Add, "+")
+                .choice(Operand::Multiply, "*"),
+        )
         .add(Parameter::option(
             Optional::new(&mut initial),
             "initial",

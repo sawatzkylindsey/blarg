@@ -303,12 +303,9 @@ mod tests {
         // Verify
         assert_eq!(error_code, 0);
 
-        let (message, error, error_context) = receiver.consume();
-        let message = message.unwrap();
+        let message = receiver.consume_message();
         assert_contains!(message, "usage: program [-h]");
         assert_contains!(message, "-h, --help");
-        assert_eq!(error, None);
-        assert_eq!(error_context, None);
     }
 
     #[rstest]
@@ -472,12 +469,9 @@ mod tests {
         // Verify
         assert_eq!(error_code, 0);
 
-        let (message, error, error_context) = receiver.consume();
-        let message = message.unwrap();
+        let message = receiver.consume_message();
         assert_contains!(message, "usage: program 1 [-h]");
         assert_contains!(message, "-h, --help");
-        assert_eq!(error, None);
-        assert_eq!(error_context, None);
     }
 
     #[rstest]

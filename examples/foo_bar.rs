@@ -62,7 +62,12 @@ fn main() {
             Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))
                 .help("Do dee doo."),
         )
-        .branch(Condition::new(Scalar::new(&mut foo_bar), "foo_bar"))
+        .branch(
+            Condition::new(Scalar::new(&mut foo_bar), "foo_bar")
+                .choice(FooBar::Foo, "abc 123")
+                .choice(FooBar::Bar, "abc 123")
+                .help("foo'y bar'y stuff"),
+        )
         .add(
             FooBar::Foo,
             Parameter::option(Optional::new(&mut initial), "initial", None),

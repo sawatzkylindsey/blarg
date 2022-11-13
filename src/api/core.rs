@@ -2,183 +2,12 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use crate::api::capture::*;
-use crate::api::field::*;
-use crate::matcher::{ArgumentConfig, Bound, OptionConfig};
-use crate::model::Nargs;
+use crate::api::{Condition, Parameter, ParameterClass};
 use crate::parser::{
-    AnonymousCapturable, ArgumentCapture, ArgumentParameter, ConfigError, OptionCapture,
-    OptionParameter, ParseError, ParseUnit, Parser, Printer,
+    ArgumentCapture, ArgumentParameter, ConfigError, ConsoleInterface, GeneralParser,
+    OptionCapture, UserInterface,
 };
-use crate::parser::{ConsoleInterface, GeneralParser};
-
-enum ParameterInner<'ap, T> {
-    Opt {
-        field: AnonymousCapture<'ap, T>,
-        nargs: Nargs,
-        name: &'static str,
-        short: Option<char>,
-        description: Option<&'static str>,
-    },
-    Arg {
-        field: AnonymousCapture<'ap, T>,
-        nargs: Nargs,
-        name: &'static str,
-        description: Option<&'static str>,
-    },
-}
-
-impl<'ap, T> std::fmt::Debug for ParameterInner<'ap, T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            ParameterInner::Opt {
-                nargs,
-                name,
-                short,
-                description,
-                ..
-            } => {
-                let description = if let Some(d) = description {
-                    format!(", {d}")
-                } else {
-                    "".to_string()
-                };
-                match short {
-                    Some(s) => {
-                        write!(
-                            f,
-                            "Opt[{t}, {nargs}, --{name}, -{s}{description}]",
-                            t = std::any::type_name::<T>()
-                        )
-                    }
-                    None => {
-                        write!(
-                            f,
-                            "Opt[{t}, {nargs}, --{name}{description}]",
-                            t = std::any::type_name::<T>()
-                        )
-                    }
-                }
-            }
-            ParameterInner::Arg {
-                nargs,
-                name,
-                description,
-                ..
-            } => {
-                let description = if let Some(d) = description {
-                    format!(", {d}")
-                } else {
-                    "".to_string()
-                };
-                write!(
-                    f,
-                    "Arg[{t}, {nargs}, {name}, {description}]",
-                    t = std::any::type_name::<T>()
-                )
-            }
-        }
-    }
-}
-
-pub struct Condition<'ap, T> {
-    arg_parameter: Parameter<'ap, T>,
-}
-
-impl<'ap, T: std::str::FromStr> Condition<'ap, T> {
-    pub fn new(value: Scalar<'ap, T>, name: &'static str) -> Self {
-        Self {
-            arg_parameter: Parameter::argument(value, name),
-        }
-    }
-
-    fn name(&self) -> String {
-        if let ParameterInner::Arg { name, .. } = self.arg_parameter.0 {
-            name.to_string()
-        } else {
-            unreachable!("internal error - argument must always be ParameterInner::Arg");
-        }
-    }
-}
-
-pub struct Parameter<'ap, T>(ParameterInner<'ap, T>);
-
-impl<'ap, T> Parameter<'ap, T> {
-    pub fn option(
-        capture_field: impl GenericCapturable<'ap, T> + CliOption + 'ap,
-        name: &'static str,
-        short: Option<char>,
-    ) -> Self {
-        let nargs = capture_field.nargs();
-        Self(ParameterInner::Opt {
-            field: AnonymousCapture::bind(capture_field),
-            nargs,
-            name,
-            short,
-            description: None,
-        })
-    }
-
-    pub fn argument(
-        capture_field: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
-        name: &'static str,
-    ) -> Self {
-        let nargs = capture_field.nargs();
-        Self(ParameterInner::Arg {
-            field: AnonymousCapture::bind(capture_field),
-            nargs,
-            name,
-            description: None,
-        })
-    }
-
-    pub fn help(self, message: &'static str) -> Self {
-        match self.0 {
-            ParameterInner::Opt {
-                field,
-                nargs,
-                name,
-                short,
-                ..
-            } => Self(ParameterInner::Opt {
-                field,
-                nargs,
-                name,
-                short,
-                description: Some(message),
-            }),
-            ParameterInner::Arg {
-                field, nargs, name, ..
-            } => Self(ParameterInner::Arg {
-                field,
-                nargs,
-                name,
-                description: Some(message),
-            }),
-        }
-    }
-}
-
-pub(crate) struct AnonymousCapture<'ap, T: 'ap> {
-    capture_field: Box<dyn GenericCapturable<'ap, T> + 'ap>,
-}
-
-impl<'ap, T> AnonymousCapture<'ap, T> {
-    pub(crate) fn bind(capture_field: impl GenericCapturable<'ap, T> + 'ap) -> Self {
-        Self {
-            capture_field: Box::new(capture_field),
-        }
-    }
-}
-
-impl<'ap, T> AnonymousCapturable for AnonymousCapture<'ap, T> {
-    fn matched(&mut self) {
-        self.capture_field.matched();
-    }
-
-    fn capture(&mut self, value: &str) -> Result<(), ParseError> {
-        self.capture_field.capture(value).map_err(ParseError::from)
-    }
-}
+use crate::parser::{OptionParameter, ParseError, ParseUnit, Parser, Printer};
 
 impl From<InvalidConversion> for ParseError {
     fn from(error: InvalidConversion) -> Self {
@@ -208,35 +37,19 @@ impl<'ap> CommandParser<'ap> {
     }
 
     pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
-        match parameter.0 {
-            ParameterInner::Opt {
-                field,
-                nargs,
-                name,
-                short,
-                description,
-            } => {
-                self.option_captures.push((
-                    OptionConfig::new(name.to_string(), short.clone(), Bound::from(nargs)),
-                    Box::new(field),
-                ));
-                self.option_parameters
-                    .push((name.to_string(), short, nargs, description));
+        let inner = parameter.consume();
+        match inner.class() {
+            ParameterClass::Opt => {
+                self.option_parameters.push(OptionParameter::from(&inner));
+                self.option_captures.push(OptionCapture::from(inner));
             }
-            ParameterInner::Arg {
-                field,
-                nargs,
-                name,
-                description,
-            } => {
-                self.argument_captures.push((
-                    ArgumentConfig::new(name.to_string(), Bound::from(nargs)),
-                    Box::new(field),
-                ));
+            ParameterClass::Arg => {
                 self.argument_parameters
-                    .push((name.to_string(), nargs, description));
+                    .push(ArgumentParameter::from(&inner));
+                self.argument_captures.push(ArgumentCapture::from(inner));
             }
-        };
+        }
+
         self
     }
 
@@ -244,14 +57,18 @@ impl<'ap> CommandParser<'ap> {
         mut self,
         condition: Condition<'ap, T>,
     ) -> SubCommandParser<'ap, T> {
-        if self.discriminator.replace(condition.name()).is_some() {
+        let parameter = condition.consume();
+        if self.discriminator.replace(parameter.name()).is_some() {
             unreachable!("internal error - cannot setup multiple discriminators");
         }
 
-        SubCommandParser::new(self.add(condition.arg_parameter))
+        SubCommandParser::new(self.add(parameter))
     }
 
-    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+    fn build_with_interface(
+        self,
+        user_interface: Box<dyn UserInterface>,
+    ) -> Result<GeneralParser<'ap>, ConfigError> {
         let parser = Parser::new(
             self.option_captures,
             self.argument_captures,
@@ -264,8 +81,12 @@ impl<'ap> CommandParser<'ap> {
         Ok(GeneralParser::command(
             self.program,
             command,
-            Box::new(ConsoleInterface::default()),
+            user_interface,
         ))
+    }
+
+    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+        self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
 }
 
@@ -294,7 +115,10 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
         self
     }
 
-    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+    fn build_with_interface(
+        self,
+        user_interface: Box<dyn UserInterface>,
+    ) -> Result<GeneralParser<'ap>, ConfigError> {
         let mut sub_commands = HashMap::default();
 
         for (discriminee, cp) in self.commands.into_iter() {
@@ -319,105 +143,26 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
             self.root.program,
             command,
             sub_commands,
-            Box::new(ConsoleInterface::default()),
+            user_interface,
         ))
+    }
+
+    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+        self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::{Collection, Parameter, Scalar, Switch};
+    use crate::model::Nargs;
+    use crate::parser::util::channel_interface;
+    use crate::test::assert_contains;
     use rstest::rstest;
 
     #[test]
-    fn option() {
-        let mut flag: bool = false;
-        let option = Parameter::option(Switch::new(&mut flag, true), "flag", None);
-
-        assert_matches!(option.0, ParameterInner::Opt {
-            name,
-            short,
-            description,
-            ..
-        } =>
-        {
-            assert_eq!(name, "flag");
-            assert_eq!(short, None);
-            assert_eq!(description, None);
-        });
-    }
-
-    #[test]
-    fn option_short() {
-        let mut flag: bool = false;
-        let option = Parameter::option(Switch::new(&mut flag, true), "flag", Some('f'));
-
-        assert_matches!(option.0, ParameterInner::Opt {
-            name,
-            short,
-            description,
-            ..
-        } =>
-        {
-            assert_eq!(name, "flag");
-            assert_eq!(short, Some('f'));
-            assert_eq!(description, None);
-        });
-    }
-
-    #[test]
-    fn option_help() {
-        let mut flag: bool = false;
-        let option =
-            Parameter::option(Switch::new(&mut flag, true), "flag", None).help("help message");
-
-        assert_matches!(option.0, ParameterInner::Opt {
-            name,
-            short,
-            description,
-            ..
-        } =>
-        {
-            assert_eq!(name, "flag");
-            assert_eq!(short, None);
-            assert_eq!(description, Some("help message"));
-        });
-    }
-
-    #[test]
-    fn argument() {
-        let mut item: bool = false;
-        let option = Parameter::argument(Scalar::new(&mut item), "item");
-
-        assert_matches!(option.0, ParameterInner::Arg {
-            name,
-            description,
-            ..
-        } =>
-        {
-            assert_eq!(name, "item");
-            assert_eq!(description, None);
-        });
-    }
-
-    #[test]
-    fn argument_help() {
-        let mut item: bool = false;
-        let option = Parameter::argument(Scalar::new(&mut item), "item").help("help message");
-
-        assert_matches!(option.0, ParameterInner::Arg {
-            name,
-            description,
-            ..
-        } =>
-        {
-            assert_eq!(name, "item");
-            assert_eq!(description, Some("help message"));
-        });
-    }
-
-    #[test]
-    fn build_empty() {
+    fn empty_build() {
         // Setup
         let ap = CommandParser::new("program");
 
@@ -503,11 +248,11 @@ mod tests {
             .branch(Condition::new(Scalar::new(&mut sub), "sub"))
             .add(
                 0,
-                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item"),
+                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item0"),
             )
             .add(
                 1,
-                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item"),
+                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item1"),
             );
 
         // Execute
@@ -556,7 +301,7 @@ mod tests {
             .branch(Condition::new(Scalar::new(&mut sub), "sub"))
             .add(
                 0,
-                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item"),
+                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item0"),
             );
 
         // Execute
@@ -570,5 +315,135 @@ mod tests {
         assert_eq!(&root, expected_root);
         assert_eq!(sub, expected_sub);
         assert_eq!(items, expected_items);
+    }
+
+    #[test]
+    fn empty_build_help() {
+        // Setup
+        let ap = CommandParser::new("program");
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = ap.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program [-h]\n");
+    }
+
+    #[test]
+    fn build_help() {
+        // Setup
+        let mut flag: bool = false;
+        let mut items: Vec<u32> = Vec::default();
+        let mut cp = CommandParser::new("program");
+        cp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .add(Parameter::argument(
+                Collection::new(&mut items, Nargs::Any),
+                "item",
+            ));
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = cp.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program [-h] [-f] [ITEM ...]\n");
+    }
+
+    #[test]
+    fn branch_build_help() {
+        // Setup
+        let mut flag: bool = false;
+        let mut sub: u32 = 0;
+        let mut items_0: Vec<u32> = Vec::default();
+        let mut items_1: Vec<u32> = Vec::default();
+        let cp = CommandParser::new("program");
+        let scp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .branch(
+                Condition::new(Scalar::new(&mut sub), "sub")
+                    .choice(0, "zero")
+                    .choice(1, "one"),
+            )
+            .add(
+                0,
+                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item0"),
+            )
+            .add(
+                1,
+                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item1"),
+            );
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = scp.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program [-h] [-f] SUB\n");
+        assert_contains!(message, "SUB         {0, 1}");
+        assert_contains!(message, "0           zero");
+        assert_contains!(message, "1           one");
+    }
+
+    #[test]
+    fn root_arguments_branch_build_help() {
+        // Setup
+        let mut flag: bool = false;
+        let mut root: String = String::default();
+        let mut sub: u32 = 0;
+        let mut items: Vec<u32> = Vec::default();
+        let cp = CommandParser::new("program");
+        let scp = cp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .add(Parameter::argument(Scalar::new(&mut root), "root"))
+            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
+            .add(
+                0,
+                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item0"),
+            );
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = scp.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program [-h] [-f] ROOT SUB\n");
     }
 }

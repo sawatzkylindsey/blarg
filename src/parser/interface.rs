@@ -167,6 +167,13 @@ pub(crate) mod util {
                 error_context_rx.recv().unwrap(),
             )
         }
+
+        pub(crate) fn consume_message(self) -> String {
+            let (message, error, error_context) = self.consume();
+            assert_eq!(error, None);
+            assert_eq!(error_context, None);
+            message.unwrap()
+        }
     }
 
     fn drain(receiver: mpsc::Receiver<Option<String>>) -> Option<String> {
