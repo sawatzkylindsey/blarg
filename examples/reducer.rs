@@ -1,5 +1,4 @@
-use blarg::api::{Collection, CommandParser, Optional, Parameter, Scalar, Switch};
-use blarg::model::Nargs;
+use blarg::{Collection, CommandParser, Nargs, Optional, Parameter, Scalar, Switch};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
@@ -79,7 +78,8 @@ fn main() {
             None,
         ))
         .add(
-            Parameter::argument(Collection::new(&mut items, Nargs::Any), "item").help("The items."),
+            Parameter::argument(Collection::new(&mut items, Nargs::AtLeastOne), "item")
+                .help("The items."),
         )
         .build()
         .expect("Invalid argument parser configuration");

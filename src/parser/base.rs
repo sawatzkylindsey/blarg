@@ -166,7 +166,7 @@ impl<'ap> Parser<'ap> {
             Err((offset, e, _)) => Err((offset, ParseError::from(e))),
         }?;
 
-        let mut discriminee: Option<OffsetValue> = None;
+        let mut discriminee: Option<(String, OffsetValue)> = None;
 
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
         for match_tokens in matches.values {
@@ -185,11 +185,14 @@ impl<'ap> Parser<'ap> {
                     .map_err(|error| (*offset, error))?;
             }
 
-            if let Some(ref target) = discriminator {
+            if let Some(ref target) = &discriminator {
                 if target == &match_tokens.name {
                     match &match_tokens.values[..] {
                         [(offset, value)] => {
-                            if discriminee.replace((*offset, value.clone())).is_some() {
+                            if discriminee
+                                .replace((target.clone(), (*offset, value.clone())))
+                                .is_some()
+                            {
                                 unreachable!(
                                     "internal error - discriminator cannot have multiple matches"
                                 );
@@ -215,7 +218,7 @@ impl<'ap> Parser<'ap> {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Continue {
-        discriminee: Option<OffsetValue>,
+        discriminee: Option<(String, OffsetValue)>,
         remaining: Vec<String>,
     },
     PrintHelp,
@@ -342,7 +345,7 @@ mod tests {
         // Setup
         let mut variable: u32 = 0;
         let generic_capture = Scalar::new(&mut variable);
-        let name = "variable";
+        let name = "variable".to_string();
         let config = ArgumentConfig::new(name.clone(), generic_capture.nargs().into());
         let capture = AnonymousCapture::bind(generic_capture);
         let parser = Parser::new(
@@ -351,7 +354,7 @@ mod tests {
                 Box::new(BlackHole::default()),
             )],
             vec![(config, Box::new(capture))],
-            Some(name.to_string()),
+            Some(name.clone()),
         )
         .unwrap();
 
@@ -362,7 +365,7 @@ mod tests {
         assert_eq!(
             result,
             Action::Continue {
-                discriminee: Some((discriminee_offset, discriminee_value.to_string())),
+                discriminee: Some((name, (discriminee_offset, discriminee_value.to_string()))),
                 remaining: expected.into_iter().map(|s| s.to_string()).collect(),
             }
         );

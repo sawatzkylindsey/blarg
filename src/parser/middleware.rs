@@ -70,7 +70,8 @@ impl<'ap> ParseUnit<'ap> {
                 discriminee,
                 remaining,
             }) => match discriminee {
-                Some((offset, variant)) => ParseResult::Incomplete {
+                Some((name, (offset, variant))) => ParseResult::Incomplete {
+                    name: name.to_ascii_uppercase(),
                     variant_offset: offset,
                     variant,
                     remaining,
@@ -94,6 +95,7 @@ impl<'ap> ParseUnit<'ap> {
 enum ParseResult {
     Complete,
     Incomplete {
+        name: String,
         variant_offset: usize,
         variant: String,
         remaining: Vec<String>,
@@ -110,6 +112,7 @@ impl<'ap> GeneralParser<'ap> {
         match command_result {
             ParseResult::Complete => Ok(()),
             ParseResult::Incomplete {
+                name,
                 variant_offset,
                 variant,
                 remaining,
@@ -147,8 +150,9 @@ impl<'ap> GeneralParser<'ap> {
                         //     assert_eq!(S.to_string(), s.to_string());
                         // }
                         // ```
-                        self.user_interface
-                            .print_error(ParseError(format!("Unknown sub-command '{variant}'.")));
+                        self.user_interface.print_error(ParseError(format!(
+                            "Unknown sub-command '{variant}' for parameter '{name}'."
+                        )));
                         self.user_interface
                             .print_error_context(ErrorContext::new(variant_offset, tokens));
                         Err(1)
@@ -225,6 +229,7 @@ mod tests {
         assert_eq!(
             result,
             ParseResult::Incomplete {
+                name: "VARIABLE".to_string(),
                 variant_offset: offset,
                 variant: discriminee.to_string(),
                 remaining: remaining.into_iter().map(|s| s.to_string()).collect(),

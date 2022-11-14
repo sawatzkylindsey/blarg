@@ -34,8 +34,12 @@ pub(crate) enum MatchError {
 impl From<CloseError> for MatchError {
     fn from(error: CloseError) -> Self {
         match error {
-            CloseError::TooFewValues { name, .. } => MatchError::Undercomplete(name),
-            CloseError::TooManyValues { name, .. } => MatchError::Overcomplete(name),
+            CloseError::TooFewValues { name, .. } => {
+                MatchError::Undercomplete(name.to_ascii_uppercase())
+            }
+            CloseError::TooManyValues { name, .. } => {
+                MatchError::Overcomplete(name.to_ascii_uppercase())
+            }
         }
     }
 }
@@ -64,7 +68,7 @@ impl TokenMatcher {
                 .is_some()
             {
                 return Err(TokenMatcherError::DuplicateOption(
-                    option_config.name().to_string(),
+                    option_config.name().to_ascii_uppercase(),
                 ));
             }
 
@@ -175,7 +179,7 @@ impl TokenMatcher {
             };
             self.update_buffer(next_buffer)
         } else {
-            Err(MatchError::InvalidOption(option_name.to_string()))
+            Err(MatchError::InvalidOption(option_name.to_ascii_uppercase()))
         }
     }
 
@@ -323,7 +327,7 @@ mod tests {
             OptionConfig::new("abc", Some('a'), Bound::Range(1, 1)),
         ]);
         let error = TokenMatcher::new(options, VecDeque::default()).unwrap_err();
-        assert_eq!(error, TokenMatcherError::DuplicateOption("abc".to_string()));
+        assert_eq!(error, TokenMatcherError::DuplicateOption("ABC".to_string()));
     }
 
     #[rstest]
@@ -373,7 +377,7 @@ mod tests {
         } else if !feed_error {
             let (offset, error, matches) = tp.close().unwrap_err();
             assert_eq!(offset, feed as usize);
-            assert_eq!(error, MatchError::Undercomplete("initial".to_string()));
+            assert_eq!(error, MatchError::Undercomplete("INITIAL".to_string()));
             assert_eq!(matches.values, vec![]);
         }
     }
@@ -422,7 +426,7 @@ mod tests {
         } else {
             let (offset, error, matches) = tp.close().unwrap_err();
             assert_eq!(offset, (feed as usize) + 9);
-            assert_eq!(error, MatchError::Undercomplete("initial".to_string()));
+            assert_eq!(error, MatchError::Undercomplete("INITIAL".to_string()));
             assert_eq!(matches.values, vec![]);
         }
     }
@@ -471,7 +475,7 @@ mod tests {
 
         assert_eq!(
             tp.feed("--moot").unwrap_err(),
-            MatchError::InvalidOption("moot".to_string())
+            MatchError::InvalidOption("MOOT".to_string())
         );
     }
 
@@ -483,7 +487,7 @@ mod tests {
         tp.feed("--verbose").unwrap();
         assert_eq!(
             tp.feed("--verbose").unwrap_err(),
-            MatchError::InvalidOption("verbose".to_string())
+            MatchError::InvalidOption("VERBOSE".to_string())
         );
     }
 
@@ -630,7 +634,7 @@ mod tests {
         // Execute & verify
         assert_eq!(
             tp.feed("-vf").unwrap_err(),
-            MatchError::Undercomplete("verbose".to_string())
+            MatchError::Undercomplete("VERBOSE".to_string())
         );
     }
 
@@ -738,10 +742,10 @@ mod tests {
 
             match bound {
                 Bound::Range(n, _) if n > feed => {
-                    assert_eq!(error, MatchError::Undercomplete("item".to_string()));
+                    assert_eq!(error, MatchError::Undercomplete("ITEM".to_string()));
                 }
                 Bound::Range(_, n) if n < feed => {
-                    assert_eq!(error, MatchError::Overcomplete("item".to_string()));
+                    assert_eq!(error, MatchError::Overcomplete("ITEM".to_string()));
                 }
                 _ => unreachable!("invalid test scenario"),
             };
@@ -777,7 +781,7 @@ mod tests {
         } else {
             let (offset, error, matches) = tp.close().unwrap_err();
             assert_eq!(offset, 0);
-            assert_eq!(error, MatchError::Undercomplete("item".to_string()));
+            assert_eq!(error, MatchError::Undercomplete("ITEM".to_string()));
             assert_eq!(matches.values, vec![]);
         }
     }
@@ -820,7 +824,7 @@ mod tests {
         } else {
             let (offset, error, matches) = tp.close().unwrap_err();
             assert_eq!(offset, 0);
-            assert_eq!(error, MatchError::Undercomplete("item".to_string()));
+            assert_eq!(error, MatchError::Undercomplete("ITEM".to_string()));
             assert_eq!(matches.values, vec![]);
         }
     }
@@ -868,7 +872,7 @@ mod tests {
 
         let (offset, error, matches) = tp.close().unwrap_err();
         assert_eq!(offset, 12);
-        assert_eq!(error, MatchError::Undercomplete("arg2".to_string()));
+        assert_eq!(error, MatchError::Undercomplete("ARG2".to_string()));
         assert_eq!(
             matches.values,
             vec![MatchTokens {

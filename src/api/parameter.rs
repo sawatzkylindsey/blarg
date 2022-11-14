@@ -8,24 +8,24 @@ use crate::parser::{
 use std::collections::HashMap;
 
 pub(crate) struct AnonymousCapture<'ap, T: 'ap> {
-    capture_field: Box<dyn GenericCapturable<'ap, T> + 'ap>,
+    field: Box<dyn GenericCapturable<'ap, T> + 'ap>,
 }
 
 impl<'ap, T> AnonymousCapture<'ap, T> {
-    pub(crate) fn bind(capture_field: impl GenericCapturable<'ap, T> + 'ap) -> Self {
+    pub(crate) fn bind(field: impl GenericCapturable<'ap, T> + 'ap) -> Self {
         Self {
-            capture_field: Box::new(capture_field),
+            field: Box::new(field),
         }
     }
 }
 
 impl<'ap, T> AnonymousCapturable for AnonymousCapture<'ap, T> {
     fn matched(&mut self) {
-        self.capture_field.matched();
+        self.field.matched();
     }
 
     fn capture(&mut self, value: &str) -> Result<(), ParseError> {
-        self.capture_field.capture(value).map_err(ParseError::from)
+        self.field.capture(value).map_err(ParseError::from)
     }
 }
 
@@ -150,6 +150,11 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
         Self(inner.choice(variant, description))
     }
 
+    pub fn help(self, description: impl Into<String>) -> Self {
+        let inner = self.0;
+        Self(inner.help(description))
+    }
+
     pub(super) fn consume(self) -> Parameter<'ap, T> {
         self.0
     }
@@ -159,14 +164,14 @@ pub struct Parameter<'ap, T>(ParameterInner<'ap, T>);
 
 impl<'ap, T> Parameter<'ap, T> {
     pub fn option(
-        capture_field: impl GenericCapturable<'ap, T> + CliOption + 'ap,
+        field: impl GenericCapturable<'ap, T> + CliOption + 'ap,
         name: impl Into<String>,
         short: Option<char>,
     ) -> Self {
-        let nargs = capture_field.nargs();
+        let nargs = field.nargs();
         Self(ParameterInner {
             class: ParameterClass::Opt,
-            field: AnonymousCapture::bind(capture_field),
+            field: AnonymousCapture::bind(field),
             nargs,
             name: name.into(),
             short,
@@ -176,13 +181,13 @@ impl<'ap, T> Parameter<'ap, T> {
     }
 
     pub fn argument(
-        capture_field: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
+        field: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
         name: impl Into<String>,
     ) -> Self {
-        let nargs = capture_field.nargs();
+        let nargs = field.nargs();
         Self(ParameterInner {
             class: ParameterClass::Arg,
-            field: AnonymousCapture::bind(capture_field),
+            field: AnonymousCapture::bind(field),
             nargs,
             name: name.into(),
             short: None,
@@ -314,12 +319,13 @@ mod tests {
             .choice(true, "b")
             .choice(false, "d")
             .choice(true, "e")
+            .help("help")
             .consume();
 
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, None);
+        assert_eq!(argument.description, Some("help".to_string()));
         assert_eq!(
             argument.choices,
             HashMap::from([
@@ -336,13 +342,14 @@ mod tests {
             .choice(true, "b")
             .choice(false, "d")
             .choice(true, "e")
+            .help("help")
             .consume();
         let argument = condition.consume();
 
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, None);
+        assert_eq!(argument.description, Some("help".to_string()));
         assert_eq!(
             argument.choices,
             HashMap::from([

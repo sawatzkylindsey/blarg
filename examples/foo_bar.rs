@@ -1,5 +1,4 @@
-use blarg::api::{Collection, CommandParser, Condition, Optional, Parameter, Scalar, Switch};
-use blarg::model::Nargs;
+use blarg::{Collection, CommandParser, Condition, Nargs, Optional, Parameter, Scalar, Switch};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
