@@ -15,6 +15,7 @@ impl From<InvalidConversion> for ParseError {
     }
 }
 
+/// The base command parser.
 pub struct CommandParser<'ap> {
     program: String,
     option_parameters: Vec<OptionParameter>,
@@ -90,6 +91,7 @@ impl<'ap> CommandParser<'ap> {
     }
 }
 
+/// The sub-command parser.
 pub struct SubCommandParser<'ap, B: std::fmt::Display> {
     root: CommandParser<'ap>,
     commands: HashMap<String, CommandParser<'ap>>,

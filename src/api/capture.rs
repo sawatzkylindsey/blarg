@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::model::Nargs;
 
-/// Behaviour allowing for multiple (0 to many) items T to be collected together.
+/// Behaviour for multiple (0 to many) items T to be collected together.
 pub trait Collectable<T> {
     /// Add a value to this `Collectable`.
     fn add(&mut self, item: T);

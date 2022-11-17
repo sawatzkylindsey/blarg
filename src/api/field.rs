@@ -7,7 +7,7 @@ use std::str::FromStr;
 use crate::api::capture::*;
 use crate::model::Nargs;
 
-/// Describes an argument/option parameter that takes a single value `Nargs::Precisely(1)`.
+/// An option parameter that takes a single value (`Nargs::Precisely(1)`).
 pub struct Scalar<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
 }
@@ -47,11 +47,7 @@ where
     }
 }
 
-/// Describes an option parameter that takes no values `Nargs::Precisely(0)`.
-/// This can never be used as an argument parameter, since by definition arguments take at least one value.
-///
-/// Notice, once Rust allows for 'specialization', we can actually implement this on `Collectable`:
-/// <https://doc.rust-lang.org/unstable-book/language-features/specialization.html>
+/// An option parameter that takes no values (`Nargs::Precisely(0)`).
 pub struct Switch<'ap, T> {
     variable: Rc<RefCell<&'ap mut T>>,
     target: Option<T>,
@@ -85,9 +81,7 @@ impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T> {
     }
 }
 
-/// Describes an option parameter that maps down to `Option`, taking a single value `Nargs::Precisely(1)`.
-/// This can never be used as an argument parameter by "blarg" paradigm.
-/// That is, if the value is an `Option`, then it must not be an argument - it is by definition optional
+/// An option parameter that maps down to `Option`, taking a single value (`Nargs::Precisely(1)`).
 pub struct Optional<'ap, T> {
     variable: Rc<RefCell<&'ap mut Option<T>>>,
 }
@@ -126,7 +120,7 @@ where
     }
 }
 
-/// Describes an argument/option parameter that takes multiple values.
+/// A parameter that takes multiple values (specifiable `Nargs`).
 pub struct Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T>,

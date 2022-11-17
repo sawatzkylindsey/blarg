@@ -1,8 +1,8 @@
-/// Describes the number of command inputs associated with the argument/option.
+/// The cardinality of inputs to match for an argument/option.
 /// Inspired by argparse: <https://docs.python.org/3/library/argparse.html#nargs>
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Nargs {
-    /// N: Limited by precisely `N` values.
+    /// N: Precisely `N` values.
     Precisely(u8),
     /// *: May be any number of values, including `0`.
     Any,

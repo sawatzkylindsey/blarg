@@ -138,18 +138,115 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentParameter {
     }
 }
 
+/// The condition argument with which to branch the parser.
+/// Used with `CommandParser::branch`.
 pub struct Condition<'ap, T>(Parameter<'ap, T>);
 
 impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
+    /// Create a condition parameter.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Condition, Scalar};
+    /// use std::str::FromStr;
+    ///
+    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr`.
+    /// enum FooBar {
+    ///     Foo,
+    ///     Bar,
+    /// }
+    /// # impl std::fmt::Display for FooBar {
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// #         match self {
+    /// #              FooBar::Foo => write!(f, "foo"),
+    /// #             FooBar::Bar => write!(f, "bar"),
+    /// #         }
+    /// #     }
+    /// # }
+    /// # impl FromStr for FooBar {
+    /// #     type Err = String;
+    /// #
+    /// #     fn from_str(value: &str) -> Result<Self, Self::Err> {
+    /// #         match value.to_lowercase().as_str() {
+    /// #             "foo" => Ok(FooBar::Foo),
+    /// #             "bar" => Ok(FooBar::Bar),
+    /// #             _ => Err(format!("unknown: {}", value)),
+    /// #         }
+    /// #     }
+    /// # }
+    ///
+    /// let mut foo_bar: FooBar = FooBar::Foo;
+    /// Condition::new(Scalar::new(&mut foo_bar), "foo_bar");
+    /// // .. parse()
+    /// match foo_bar {
+    ///     FooBar::Foo => println!("Do foo'y things."),
+    ///     FooBar::Bar => println!("Do bar'y things."),
+    /// };
+    /// ```
     pub fn new(value: Scalar<'ap, T>, name: &'static str) -> Self {
         Condition(Parameter::argument(value, name))
     }
 
+    /// Document a choice in the help message for the sub-command condition.
+    /// If repeated for the same `variant`, only the final message will apply to the sub-command condition.
+    /// Repeat using different variants to document multiple choices.
+    /// Needn't be exhaustive.
+    ///
+    /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Condition, Scalar};
+    /// use std::str::FromStr;
+    ///
+    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr`.
+    /// enum FooBar {
+    ///     Foo,
+    ///     Bar,
+    /// }
+    /// # impl std::fmt::Display for FooBar {
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    /// #         match self {
+    /// #              FooBar::Foo => write!(f, "foo"),
+    /// #             FooBar::Bar => write!(f, "bar"),
+    /// #         }
+    /// #     }
+    /// # }
+    /// # impl FromStr for FooBar {
+    /// #     type Err = String;
+    /// #
+    /// #     fn from_str(value: &str) -> Result<Self, Self::Err> {
+    /// #         match value.to_lowercase().as_str() {
+    /// #             "foo" => Ok(FooBar::Foo),
+    /// #             "bar" => Ok(FooBar::Bar),
+    /// #             _ => Err(format!("unknown: {}", value)),
+    /// #         }
+    /// #     }
+    /// # }
+    ///
+    /// let mut foo_bar: FooBar = FooBar::Foo;
+    /// Condition::new(Scalar::new(&mut foo_bar), "foo_bar")
+    ///     .choice(FooBar::Foo, "--this will get discarded--")
+    ///     .choice(FooBar::Foo, "Do foo'y things.")
+    ///     .choice(FooBar::Bar, "Do bar'y things.");
+    /// ```
     pub fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let inner = self.0;
         Self(inner.choice(variant, description))
     }
 
+    /// Document the help message for this sub-command condition.
+    /// If repeated, only the final message will apply to the sub-command condition.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Condition, Scalar};
+    ///
+    /// let mut case: u32 = 0;
+    /// Condition::new(Scalar::new(&mut case), "case")
+    ///     .help("--this will get discarded--")
+    ///     .help("Choose the 'case' to execute.");
+    /// ```
     pub fn help(self, description: impl Into<String>) -> Self {
         let inner = self.0;
         Self(inner.help(description))
@@ -160,9 +257,20 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     }
 }
 
+/// An argument/option for the `CommandParser`.
+/// Used with `CommandParser::add` and `SubCommandParser::add`.
 pub struct Parameter<'ap, T>(ParameterInner<'ap, T>);
 
 impl<'ap, T> Parameter<'ap, T> {
+    /// Create an option parameter.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Parameter, Switch};
+    ///
+    /// let mut verbose: bool = false;
+    /// Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'));
+    /// ```
     pub fn option(
         field: impl GenericCapturable<'ap, T> + CliOption + 'ap,
         name: impl Into<String>,
@@ -180,6 +288,15 @@ impl<'ap, T> Parameter<'ap, T> {
         })
     }
 
+    /// Create an argument parameter.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Parameter, Scalar};
+    ///
+    /// let mut verbose: bool = false;
+    /// Parameter::argument(Scalar::new(&mut verbose), "verbose");
+    /// ```
     pub fn argument(
         field: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
         name: impl Into<String>,
@@ -196,6 +313,18 @@ impl<'ap, T> Parameter<'ap, T> {
         })
     }
 
+    /// Document the help message for this parameter.
+    /// If repeated, only the final message will apply to the parameter.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Parameter, Scalar};
+    ///
+    /// let mut verbose: bool = false;
+    /// Parameter::argument(Scalar::new(&mut verbose), "verbose")
+    ///     .help("--this will get discarded--")
+    ///     .help("Make the program output verbose.");
+    /// ```
     pub fn help(self, description: impl Into<String>) -> Self {
         let mut inner = self.0;
         inner.description = Some(description.into());
@@ -212,6 +341,24 @@ impl<'ap, T> Parameter<'ap, T> {
 }
 
 impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
+    /// Document a choice in the help message for this parameter.
+    /// If repeated for the same `variant`, only the final message will apply to the parameter.
+    /// Repeat using different variants to document multiple choices.
+    /// Needn't be exhaustive.
+    ///
+    /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Parameter, Scalar};
+    /// use std::str::FromStr;
+    ///
+    /// let mut door: u32 = 0;
+    /// Parameter::argument(Scalar::new(&mut door), "door")
+    ///     .choice(1, "--this will get discarded--")
+    ///     .choice(1, "Enter door #1.")
+    ///     .choice(2, "Enter door #2.");
+    /// ```
     pub fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let mut inner = self.0;
         inner

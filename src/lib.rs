@@ -51,15 +51,15 @@
 //! ```
 //!
 //! # Api Configuration
-//! Configure `blarg` by starting with a `CommandParser` and `add`ing parameters.
-//! There are two classes of parameters: `Parameter::argument` and `Parameter::option`.
+//! Configure `blarg` by starting with a [`CommandParser`] and `add`ing parameters.
+//! There are two classes of parameters: [`Parameter::argument`] and [`Parameter::option`].
 //!
 //! Each parameter takes a *field* which serves to specify the following aspects on the Cli:
 //! * The underlying type `T` of the parameter (ex: `u32`).
 //! * Whether `T` is wrapped in a container type `C` (ex: `Vec<T>` or `Option<T>`).
 //! * The cardinality of the parameter (ex: 0, 1, N, at least 1, etc).
 //!
-//! All type `T` parsing in `blarg` is underpinned by `std::str::FromStr`.
+//! All type `T` parsing in `blarg` is underpinned by [`std::str::FromStr`].
 //! In other words, `blarg` will handle your custom type `T`, as long as it implements `std::str::FromStr`.
 //!
 //! The other aspects of parameter configuration relate to additional Cli usage and optics:
@@ -67,15 +67,15 @@
 //! * Description of the parameter when displaying `--help`.
 //!
 //! ### Fields
-//! * `Scalar`: defines a single-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
+//! * [`Scalar`]: defines a single-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
 //! This is the most common field to use in your Cli.
-//! * `Collection`: defines a multi-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
+//! * [`Collection`]: defines a multi-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
 //! This field allows you to configure the cardinality (aka: `Nargs`) for any collection that implements `Collectable`.
 //! `blarg` provides this implementation for `Vec<T>` and `HashSet<T>`.
-//! * `Switch`: defines a no-value `Parameter::option` (not applicable to `Parameter::argument`).
+//! * [`Switch`]: defines a no-value `Parameter::option` (not applicable to `Parameter::argument`).
 //! This is used when specifying Cli *flags* (ex: `--verbose`).
 //! Note that `Switch` may apply to any type `T` (not restricted to just `bool`).
-//! * `Optional`: defines an optional `Parameter::option` (not applicable to `Parameter::argument`).
+//! * [`Optional`]: defines an optional `Parameter::option` (not applicable to `Parameter::argument`).
 //! This field is used exclusively to specify an `Option<T>` type.
 //!
 //! ### Sub-commands
@@ -83,9 +83,9 @@
 //! Both options and arguments may be added to the root parser via `add`.
 //! The sub-command section of the parser begins by `branch`ing this parser.
 //!
-//! Branching takes a special `Condition` parameter which only allows a `Scalar` field.
-//! You may describe the sub-commands on the condition via `choice` (the same mechanism as `Parameter::choice`).
-//! Once `branch`ed, the result is a `SubCommandParser` that behaves very similar to a regular `CommandParser`.
+//! Branching takes a special [`Condition`] parameter which only allows a `Scalar` field.
+//! You may describe the sub-commands on the condition via [`Condition::choice`] (the same mechanism as [`Parameter::choice`]).
+//! Once `branch`ed, the result is a [`SubCommandParser`] that behaves very similar to a regular `CommandParser`.
 //! The difference is that `add` takes the sub-command instance to which the parameter applies.
 //! The same instance may be repeated to `add` various arguments to the sub-command.
 //!
@@ -128,7 +128,7 @@
 //! ```
 //!
 //! **Condition**<br/>
-//! There is an implicit (not compile-time enforced) requirement that `std::str::FromStr` must be inverted via `std::fmt::Display` on the condition type `T`.
+//! There is an implicit (not compile-time enforced) requirement that `std::str::FromStr` must be inverted via [`std::fmt::Display`] on the condition type `T`.
 //! Put simply:
 //!
 //! ```ignore
@@ -176,8 +176,6 @@
 //! Collection<C<T>>  | n    | [n]         | VALUE .. VALUE   | precisely n
 //! Collection<C<T>>  | *    | [0, ∞)      | [VALUE ...]      | any amount; captured greedily
 //! Collection<C<T>>  | +    | [1, ∞)      | VALUE [...]      | at least 1; captured greedily
-//! Switch<T>         |      |             |                  | invalid; use with Parameter::option
-//! Optional<T>       |      |             |                  | invalid; use with Parameter::option
 //! ```
 //!
 //! **Option**</br>
