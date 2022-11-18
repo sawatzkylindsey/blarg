@@ -1,9 +1,9 @@
 //! `blarg` is a command line parser for Rust.
 //!
-//! Although other crates fit this role, we have found they prioritize different concerns than those we are interested in.
+//! Although other crates provide command line parser functionality, we have found they prioritize different concerns than those we are interested in.
 //! It is very possible those crates can be configured to make *our desired* argument parser.
-//! We built `blarg` to create *our desired* style of argument parser by default, without extra configuration.
-//! Specifically, `blarg` attempts to prioritize the following design & display concerns:
+//! We built `blarg` to create *our desired* style of argument parser "out of the box".
+//! Specifically, `blarg` attempts to prioritize the following design concerns:
 //! * *Type safe argument parsing*:
 //! The user should not call any `&str -> T` conversion functions directly.
 //! * *Domain sensitive argument parsing*:
@@ -17,11 +17,20 @@
 //! The user may configure sub-commands which act to collect multiple related programs into a single Cli.
 //! * *Detailed yet basic UX*:
 //! The help and error output of the Cli should be very detailed, leaving no ambiguity in how to use the program.
-//! However, we do not aim to support rich optical configurations, such as colour output, shell completions, etc.
+//! However, we do not aim to support rich display configurations, such as colour output, shell completions, etc.
 //! * *Reasonable performance*:
 //! The argument parser should be *fast enough*.
 //! To be clear, we are of the opinion that the cost of argument parsing is insignificant with respect to any non-trivial program.
 //! That said, `blarg` will still aim to minimize its memory & CPU footprint, within reason.
+//!
+//! ### Future
+//! As it currently stands, we feel `blarg` fits a niche role in the rust ecosystem.
+//! Additionally, we have other plans you may be interested in:
+//! * Derive macro support.
+//! * Automatic choice documentation.
+//! * Default/initial value documentation.
+//! * Help message formatting, such as line wrapping.
+//! * Fallible `Collectable`s.
 //!
 //! # Usage
 //! ```no_run
@@ -128,7 +137,7 @@
 //! ```
 //!
 //! **Condition**<br/>
-//! There is an implicit (not compile-time enforced) requirement that `std::str::FromStr` must be inverted via [`std::fmt::Display`] on the condition type `T`.
+//! There is an implicit (not compile-time enforced) requirement that `std::str::FromStr` must be inverted by [`std::fmt::Display`] for the type `T`.
 //! Put simply:
 //!
 //! ```ignore
@@ -137,7 +146,39 @@
 //! assert_eq!(s_prime, s);
 //! ```
 //!
-//! The actual implicit requirement is a little more nuanced; see the `Condition` documentation for more details.
+//! For more details on this requirement, see the `Condition` documentation.
+//!
+//! ### Defaults & Initials
+//! Technically, `blarg` has nothing to do with specifying default values for parameters.
+//! This may be confusing - defaults are a common feature for command line parsers!
+//! However, the defaults of your Cli will come from the variable initializations when configuring `blarg`.
+//! We plan to support presenting defaults over the help message, but behaviourally `blarg` will not take part in *setting* parameter defaults.
+//!
+//! ```
+//! // The default for the 'verbose' parameter is 'false'.
+//! let mut verbose: bool = false;
+//! // The default for the 'value' parameter is '0'.
+//! let mut value: u32 = 0;
+//!
+//! // Use `verbose` and `value` in the CommandParser.
+//! // `CommandParser::parse` will assign onto of these variables.
+//! ```
+//!
+//! We'd also like to point out: semantically, defaults only apply to options (`Parameter::option`).
+//! By definition, arguments (`Parameter::argument`) must be specified on the Cli, so having a 'default' does not make sense.
+//!
+//! In the case of `Collection` parameters (for both options and arguments), the story is a little more tricky.
+//! It is still true the initial value comes the variable initialization, but this cannot be called a 'default' in the sense of a default parameter.
+//! Rather, the collection starts off from the initialization, and then is *added to* (via [`Collectable`]) upon receiving Cli inputs.
+//! Semantically, it is an 'initial', not a 'default'.
+//!
+//! ```
+//! // The initial for the 'items' parameter is '[0, 1, 2]'.
+//! let mut items: Vec<u32> = vec![0, 1, 2];
+//!
+//! // Use `items` in the CommandParser.
+//! // `CommandParser::parse` will `Collectable::add` to `items`.
+//! ```
 //!
 //! # Cli Syntax
 //! `blarg` parses the Cli tokens according to the following set of rules.

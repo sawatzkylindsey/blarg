@@ -140,6 +140,50 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentParameter {
 
 /// The condition argument with which to branch the parser.
 /// Used with `CommandParser::branch`.
+///
+/// There is an implicit (non-compile time) requirement for the type `T` of a `Condition`:
+/// > The implementations of `std::fmt::Display` and `std::str::FromStr` must form an inverse relationship.
+///
+/// This sounds scary and onerous, but most types will naturally adhere to this requirement.
+/// Consider rusts implementation for `bool`, where this is requirement holds:
+/// ```
+/// # use std::str::FromStr;
+/// assert_eq!(bool::from_str("true").unwrap().to_string(), "true");
+/// assert_eq!(bool::from_str("false").unwrap().to_string(), "false");
+/// ```
+///
+/// However, not all types will necessarily adhere to this requirement.
+/// Observe the following enum:
+/// ```
+/// # use std::str::FromStr;
+/// // Implement FromStr to be case-insensitive.
+/// // Implement Display.
+/// enum FooBar {
+///     Foo,
+///     Bar,
+/// }
+/// # impl FromStr for FooBar {
+/// #    type Err = String;
+/// #    fn from_str(value: &str) -> Result<Self, Self::Err> {
+/// #        match value.to_lowercase().as_str() {
+/// #            "foo" => Ok(FooBar::Foo),
+/// #            "bar" => Ok(FooBar::Bar),
+/// #            _ => Err(format!("unknown: {}", value)),
+/// #        }
+/// #    }
+/// # }
+/// # impl std::fmt::Display for FooBar {
+/// #   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// #       match self {
+/// #           FooBar::Foo => write!(f, "Foo"),
+/// #           FooBar::Bar => write!(f, "Bar"),
+/// #       }
+/// #   }
+/// # }
+/// assert_eq!(FooBar::from_str("Foo").unwrap().to_string(), "Foo");
+/// // Display does not invert FromStr!
+/// assert_ne!(FooBar::from_str("foo").unwrap().to_string(), "foo");
+/// ```
 pub struct Condition<'ap, T>(Parameter<'ap, T>);
 
 impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
