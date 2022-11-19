@@ -8,10 +8,10 @@ pub trait Collectable<T> {
     fn add(&mut self, item: T);
 }
 
-/// Marker trait for capturable types that can formulate an option in the CLI
+/// Marker trait for capturable types that can formulate an option in the Cli
 pub trait CliOption {}
 
-/// Marker trait for capturable types that can formulate an argument in the CLI.
+/// Marker trait for capturable types that can formulate an argument in the Cli.
 pub trait CliArgument {}
 
 /// Behaviour to capture an explicit generic type T from an input `&str`.

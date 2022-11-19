@@ -180,6 +180,12 @@
 //! // `GeneralParser::parse` will `Collectable::add` to `items`.
 //! ```
 //!
+//! ### Organization
+//! It may be useful to organize your program variables into a single struct:
+//! ```no_run
+#![doc = include_str!("../examples/demo_organization.rs")]
+//! ```
+//!
 //! # Cli Syntax
 //! `blarg` parses the Cli tokens according to the following set of rules.
 //! By and large this syntax should be familiar to many Cli developers, with a few subtle nuances for various edge cases.
@@ -235,7 +241,7 @@
 //! 1. Examples of domain sensitive argument parsing:
 //!     * A collection that accepts a precise number of values: `triple-input-program 1 2 3`
 //!     * A collection that de-duplicates values: `set-input-program 1 2 1`
-//! 2. Although the greedy matching can be broken by an option, `blarg` does not recommend a CLI design that requires this tactic.
+//! 2. Although the greedy matching can be broken by an option, `blarg` does not recommend a Cli design that requires this tactic.
 //! Clis that use more than one `*` or `+` greedy parameter are complicated, and put a significant burden on the user to understand how to break the greedy matching.
 //! 3. Using the equals sign inside a parameter can be a useful way to parse complex structs.
 //! In other words, you can write a custom `std::str::FromStr` deserializer.

@@ -1,7 +1,7 @@
 [package]
 name = "blarg"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/sawatzkylindsey/blarg"
 keywords = ["argument", "cli", "arg", "parser", "parse"]
 categories = ["command-line-interface"]
@@ -12,9 +12,9 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 thiserror = "^1.0"
-rand = "^0.8"
 
 [dev-dependencies]
-empty = "0.0.4"
-rstest = "^0.12"
 assert_matches = "1.5"
+empty = "0.0.4"
+rand = "^0.8"
+rstest = "^0.15"
