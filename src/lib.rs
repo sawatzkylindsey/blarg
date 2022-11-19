@@ -1,16 +1,16 @@
 //! `blarg` is a command line parser for Rust.
 //!
 //! Although other crates provide command line parser functionality, we have found they prioritize different concerns than those we are interested in.
-//! It is very possible those crates can be configured to make *our desired* argument parser.
-//! We built `blarg` to create *our desired* style of argument parser "out of the box".
+//! It is very possible those crates can be configured to make *our desired* command line parser.
+//! We built `blarg` to create *our desired* style of command line parser "out of the box".
 //! Specifically, `blarg` attempts to prioritize the following design concerns:
 //! * *Type safe argument parsing*:
 //! The user should not call any `&str -> T` conversion functions directly.
 //! * *Domain sensitive argument parsing*:
 //! The user should not validate/reject any domain invalid inputs (see footnotes #1 for examples).
-//! Instead, the argument parser should be configurable to prevent these.
+//! Instead, the command line parser should be configurable to prevent these.
 //! * *Argument vs. option paradigm*:
-//! The basic Api design for constructing an argument parser is via *arguments* and *options*.
+//! The basic Api design for constructing an command line parser is via *arguments* and *options*.
 //! Briefly, arguments are required parameters specified positionally on the Cli.
 //! Options are optional parameters specified via `--..` or `-..` syntax.
 //! * *Sub-command paradigm*:
@@ -19,7 +19,7 @@
 //! The help and error output of the Cli should be very detailed, leaving no ambiguity in how to use the program.
 //! However, we do not aim to support rich display configurations, such as colour output, shell completions, etc.
 //! * *Reasonable performance*:
-//! The argument parser should be *fast enough*.
+//! The command line parser should be *fast enough*.
 //! To be clear, we are of the opinion that the cost of argument parsing is insignificant with respect to any non-trivial program.
 //! That said, `blarg` will still aim to minimize its memory & CPU footprint, within reason.
 //!
@@ -60,7 +60,7 @@
 //! ```
 //!
 //! # Api Configuration
-//! Configure `blarg` by starting with a [`CommandParser`] and `add`ing parameters.
+//! Configure `blarg` by starting with a [`CommandLineParser`] and `add`ing parameters.
 //! There are two classes of parameters: [`Parameter::argument`] and [`Parameter::option`].
 //!
 //! Each parameter takes a *field* which serves to specify the following aspects on the Cli:
@@ -88,13 +88,13 @@
 //! This field is used exclusively to specify an `Option<T>` type.
 //!
 //! ### Sub-commands
-//! To setup a sub-command based Cli, start with a root `CommandParser`.
+//! To setup a sub-command based Cli, start with a root `CommandLineParser`.
 //! Both options and arguments may be added to the root parser via `add`.
 //! The sub-command section of the parser begins by `branch`ing this parser.
 //!
 //! Branching takes a special [`Condition`] parameter which only allows a `Scalar` field.
 //! You may describe the sub-commands on the condition via [`Condition::choice`] (the same mechanism as [`Parameter::choice`]).
-//! Once `branch`ed, the result is a [`SubCommandParser`] that behaves very similar to a regular `CommandParser`.
+//! Once `branch`ed, the result is a [`SubCommandParser`] that behaves very similar to a regular `CommandLineParser`.
 //! The difference is that `add` takes the sub-command instance to which the parameter applies.
 //! The same instance may be repeated to `add` various arguments to the sub-command.
 //!
@@ -160,8 +160,8 @@
 //! // The default for the 'value' parameter is '0'.
 //! let mut value: u32 = 0;
 //!
-//! // Use `verbose` and `value` in the CommandParser.
-//! // `CommandParser::parse` will assign onto of these variables.
+//! // Use `verbose` and `value` in the CommandLineParser.
+//! // `GeneralParser::parse` will assign onto of these variables.
 //! ```
 //!
 //! We'd also like to point out: semantically, defaults only apply to options (`Parameter::option`).
@@ -176,8 +176,8 @@
 //! // The initial for the 'items' parameter is '[0, 1, 2]'.
 //! let mut items: Vec<u32> = vec![0, 1, 2];
 //!
-//! // Use `items` in the CommandParser.
-//! // `CommandParser::parse` will `Collectable::add` to `items`.
+//! // Use `items` in the CommandLineParser.
+//! // `GeneralParser::parse` will `Collectable::add` to `items`.
 //! ```
 //!
 //! # Cli Syntax
@@ -241,6 +241,7 @@
 //! In other words, you can write a custom `std::str::FromStr` deserializer.
 //! For example, `a=123,b=456` could be deserialized into `struct MyStruct { a: u32, b: u32 }`.
 //!
+#![deny(missing_docs)]
 mod api;
 mod constant;
 mod matcher;
@@ -249,6 +250,7 @@ mod parser;
 
 pub use api::*;
 pub use model::*;
+pub use parser::GeneralParser;
 
 #[cfg(test)]
 #[macro_use]

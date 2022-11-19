@@ -1,4 +1,4 @@
-use blarg::{CommandParser, Condition, Parameter, Scalar, Switch};
+use blarg::{CommandLineParser, Condition, Parameter, Scalar, Switch};
 
 fn main() {
     let mut sub: u32 = 0;
@@ -6,8 +6,8 @@ fn main() {
     let mut opt_0: bool = false;
     let mut arg_1: bool = false;
 
-    let cp = CommandParser::new("sub-command");
-    let parser = cp
+    let clp = CommandLineParser::new("sub-command");
+    let parser = clp
         .branch(
             Condition::new(Scalar::new(&mut sub), "sub")
                 // "0" is an undocumented sub-command.
@@ -22,7 +22,7 @@ fn main() {
         )
         .add(1, Parameter::argument(Scalar::new(&mut arg_1), "arg"))
         .build()
-        .expect("Invalid argument parser configuration");
+        .expect("The parser configuration must be valid (ex: no parameter name repeats).");
 
     parser.parse();
 

@@ -1,4 +1,4 @@
-use blarg::{Collection, CommandParser, Condition, Nargs, Optional, Parameter, Scalar, Switch};
+use blarg::{Collection, CommandLineParser, Condition, Nargs, Optional, Parameter, Scalar, Switch};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;
@@ -55,7 +55,7 @@ fn main() {
     let mut countries: HashSet<Country> = HashSet::default();
     let mut items: Vec<u32> = Vec::default();
 
-    let ap = CommandParser::new("foo_bar");
+    let ap = CommandLineParser::new("foo_bar");
     let parser = ap
         .add(
             Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'))

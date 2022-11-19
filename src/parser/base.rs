@@ -36,7 +36,7 @@ impl From<MatchError> for ParseError {
 
 /// Behaviour to capture an implicit generic type T from an input `&str`.
 ///
-/// We use this at the middle/top of the argument parser object graph so that different types may all be 'captured' in a single argument parser.
+/// We use this at the middle/top of the command line parser object graph so that different types may all be 'captured' in a generic-free struct.
 pub(crate) trait AnonymousCapturable {
     /// Declare that the parameter has been matched.
     fn matched(&mut self);

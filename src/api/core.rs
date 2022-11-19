@@ -15,8 +15,19 @@ impl From<InvalidConversion> for ParseError {
     }
 }
 
-/// The base command parser.
-pub struct CommandParser<'ap> {
+/// The base command line parser.
+///
+/// ### Example
+/// ```
+/// use blarg::{CommandLineParser};
+///
+/// let parser = CommandLineParser::new("program")
+///     // Configure with CommandLineParser::add and CommandLineParser::branch.
+///     .build()
+///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+/// parser.parse_tokens(empty::slice()).unwrap();
+/// ```
+pub struct CommandLineParser<'ap> {
     program: String,
     option_parameters: Vec<OptionParameter>,
     argument_parameters: Vec<ArgumentParameter>,
@@ -25,7 +36,8 @@ pub struct CommandParser<'ap> {
     discriminator: Option<String>,
 }
 
-impl<'ap> CommandParser<'ap> {
+impl<'ap> CommandLineParser<'ap> {
+    /// Create a command line parser.
     pub fn new(program: impl Into<String>) -> Self {
         Self {
             program: program.into(),
@@ -37,6 +49,28 @@ impl<'ap> CommandParser<'ap> {
         }
     }
 
+    /// Add an argument/option to the command line parser.
+    ///
+    /// The order of argument parameters corresponds to their positional order during parsing.
+    /// The order of option parameters does not matter.
+    ///
+    /// ### Example
+    /// ```no_run
+    /// use blarg::{CommandLineParser, Parameter, Scalar};
+    ///
+    /// let mut a: u32 = 0;
+    /// let mut b: u32 = 0;
+    /// let parser = CommandLineParser::new("program")
+    ///     .add(Parameter::argument(Scalar::new(&mut a), "a"))
+    ///     .add(Parameter::argument(Scalar::new(&mut b), "b"))
+    ///     .build()
+    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///
+    /// parser.parse_tokens(vec!["1", "2"].as_slice()).unwrap();
+    ///
+    /// assert_eq!(a, 1);
+    /// assert_eq!(b, 2);
+    /// ```
     pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
         let inner = parameter.consume();
         match inner.class() {
@@ -54,6 +88,33 @@ impl<'ap> CommandParser<'ap> {
         self
     }
 
+    /// Branch into a sub-command parser.
+    ///
+    /// This changes the command line parser into a sub-command style command line parser.
+    /// Any parameters added before the branch apply to the root parser, while subsequent parameters from this point forward apply to the sub-commands.
+    ///
+    /// Branching is always done with a `Scalar` `Parameter::argument` - aka: [`Condition`].
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{CommandLineParser, Parameter, Scalar, Condition};
+    ///
+    /// let mut belongs_to_root: u32 = 0;
+    /// let mut sub_command: String = "".to_string();
+    /// let mut belongs_to_sub_command: u32 = 0;
+    /// let parser = CommandLineParser::new("program")
+    ///     .add(Parameter::argument(Scalar::new(&mut belongs_to_root), "belongs_to_root"))
+    ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
+    ///     .add("the-command".to_string(), Parameter::argument(Scalar::new(&mut belongs_to_sub_command), "belongs_to_sub_command"))
+    ///     .build()
+    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///
+    /// parser.parse_tokens(vec!["1", "the-command", "2"].as_slice()).unwrap();
+    ///
+    /// assert_eq!(belongs_to_root, 1);
+    /// assert_eq!(&sub_command, "the-command");
+    /// assert_eq!(belongs_to_sub_command, 2);
+    /// ```
     pub fn branch<T: std::str::FromStr + std::fmt::Display>(
         mut self,
         condition: Condition<'ap, T>,
@@ -86,6 +147,8 @@ impl<'ap> CommandParser<'ap> {
         ))
     }
 
+    /// Build the command line parser.
+    /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
     pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
         self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
@@ -93,13 +156,13 @@ impl<'ap> CommandParser<'ap> {
 
 /// The sub-command parser.
 pub struct SubCommandParser<'ap, B: std::fmt::Display> {
-    root: CommandParser<'ap>,
-    commands: HashMap<String, CommandParser<'ap>>,
+    root: CommandLineParser<'ap>,
+    commands: HashMap<String, CommandLineParser<'ap>>,
     _phantom: PhantomData<B>,
 }
 
 impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
-    pub fn new(root: CommandParser<'ap>) -> Self {
+    fn new(root: CommandLineParser<'ap>) -> Self {
         Self {
             root,
             commands: HashMap::default(),
@@ -107,13 +170,38 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
         }
     }
 
+    /// Add an argument/option to the sub-command parser.
+    ///
+    /// The order of argument parameters corresponds to their positional order during parsing.
+    /// The order of option parameters does not matter.
+    ///
+    /// ### Example
+    /// ```no_run
+    /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
+    ///
+    /// let mut value_a: u32 = 0;
+    /// let mut value_b: u32 = 0;
+    /// let mut sub_command: String = "".to_string();
+    /// let parser = CommandLineParser::new("program")
+    ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
+    ///     .add("a".to_string(), Parameter::argument(Scalar::new(&mut value_a), "value_a"))
+    ///     .add("b".to_string(), Parameter::argument(Scalar::new(&mut value_b), "value_b"))
+    ///     .build()
+    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///
+    /// parser.parse_tokens(vec!["a", "1"].as_slice()).unwrap();
+    ///
+    /// assert_eq!(&sub_command, "a");
+    /// assert_eq!(value_a, 1);
+    /// assert_eq!(value_b, 0);
+    /// ```
     pub fn add<T>(mut self, sub_command: B, parameter: Parameter<'ap, T>) -> Self {
         let command_str = sub_command.to_string();
-        let cp = self
+        let clp = self
             .commands
             .remove(&command_str)
-            .unwrap_or_else(|| CommandParser::new(command_str.clone()));
-        self.commands.insert(command_str, cp.add(parameter));
+            .unwrap_or_else(|| CommandLineParser::new(command_str.clone()));
+        self.commands.insert(command_str, clp.add(parameter));
         self
     }
 
@@ -149,6 +237,8 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
         ))
     }
 
+    /// Build the sub-command based command line parser.
+    /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
     pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
         self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
@@ -166,10 +256,10 @@ mod tests {
     #[test]
     fn empty_build() {
         // Setup
-        let ap = CommandParser::new("program");
+        let clp = CommandLineParser::new("program");
 
         // Execute
-        let parser = ap.build().unwrap();
+        let parser = clp.build().unwrap();
 
         // Verify
         parser.parse_tokens(empty::slice()).unwrap();
@@ -192,8 +282,8 @@ mod tests {
         // Setup
         let mut flag: bool = false;
         let mut items: Vec<u32> = Vec::default();
-        let mut cp = CommandParser::new("program");
-        cp = cp
+        let mut clp = CommandLineParser::new("program");
+        clp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -205,7 +295,7 @@ mod tests {
             ));
 
         // Execute
-        let parser = cp.build().unwrap();
+        let parser = clp.build().unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -240,8 +330,8 @@ mod tests {
         let mut sub: u32 = 0;
         let mut items_0: Vec<u32> = Vec::default();
         let mut items_1: Vec<u32> = Vec::default();
-        let cp = CommandParser::new("program");
-        let scp = cp
+        let clp = CommandLineParser::new("program");
+        let scp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -292,8 +382,8 @@ mod tests {
         let mut root: String = String::default();
         let mut sub: u32 = 0;
         let mut items: Vec<u32> = Vec::default();
-        let cp = CommandParser::new("program");
-        let scp = cp
+        let clp = CommandLineParser::new("program");
+        let scp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -322,11 +412,11 @@ mod tests {
     #[test]
     fn empty_build_help() {
         // Setup
-        let ap = CommandParser::new("program");
+        let clp = CommandLineParser::new("program");
         let (sender, receiver) = channel_interface();
 
         // Execute
-        let parser = ap.build_with_interface(Box::new(sender)).unwrap();
+        let parser = clp.build_with_interface(Box::new(sender)).unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -343,8 +433,8 @@ mod tests {
         // Setup
         let mut flag: bool = false;
         let mut items: Vec<u32> = Vec::default();
-        let mut cp = CommandParser::new("program");
-        cp = cp
+        let mut clp = CommandLineParser::new("program");
+        clp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -357,7 +447,7 @@ mod tests {
         let (sender, receiver) = channel_interface();
 
         // Execute
-        let parser = cp.build_with_interface(Box::new(sender)).unwrap();
+        let parser = clp.build_with_interface(Box::new(sender)).unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -376,8 +466,8 @@ mod tests {
         let mut sub: u32 = 0;
         let mut items_0: Vec<u32> = Vec::default();
         let mut items_1: Vec<u32> = Vec::default();
-        let cp = CommandParser::new("program");
-        let scp = cp
+        let clp = CommandLineParser::new("program");
+        let scp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -421,8 +511,8 @@ mod tests {
         let mut root: String = String::default();
         let mut sub: u32 = 0;
         let mut items: Vec<u32> = Vec::default();
-        let cp = CommandParser::new("program");
-        let scp = cp
+        let clp = CommandLineParser::new("program");
+        let scp = clp
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",

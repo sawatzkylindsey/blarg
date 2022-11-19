@@ -16,6 +16,7 @@ impl<'ap, T> CliOption for Scalar<'ap, T> {}
 impl<'ap, T> CliArgument for Scalar<'ap, T> {}
 
 impl<'ap, T> Scalar<'ap, T> {
+    /// Create a scalar parameter.
     pub fn new(variable: &'ap mut T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -56,6 +57,7 @@ pub struct Switch<'ap, T> {
 impl<'ap, T> CliOption for Switch<'ap, T> {}
 
 impl<'ap, T> Switch<'ap, T> {
+    /// Create a switch parameter (option).
     pub fn new(variable: &'ap mut T, target: T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -89,6 +91,7 @@ pub struct Optional<'ap, T> {
 impl<'ap, T> CliOption for Optional<'ap, T> {}
 
 impl<'ap, T> Optional<'ap, T> {
+    /// Create an optional parameter (option).
     pub fn new(variable: &'ap mut Option<T>) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -138,6 +141,7 @@ impl<'ap, C, T> Collection<'ap, C, T>
 where
     C: 'ap + Collectable<T>,
 {
+    /// Create a collection parameter.
     pub fn new(variable: &'ap mut C, nargs: Nargs) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),

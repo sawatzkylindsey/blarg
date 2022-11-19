@@ -6,6 +6,8 @@ use crate::parser::interface::UserInterface;
 use crate::parser::printer::Printer;
 use crate::parser::ErrorContext;
 
+/// The configured command line parser.
+/// Built via `CommandLineParser::build` or `SubCommandParser::build`.
 pub struct GeneralParser<'ap> {
     program: String,
     command: ParseUnit<'ap>,
@@ -104,10 +106,31 @@ enum ParseResult {
 }
 
 impl<'ap> GeneralParser<'ap> {
-    pub(crate) fn parse_tokens(mut self, tokens: &[&str]) -> Result<(), i32> {
-        let command_result =
-            self.command
-                .invoke(tokens, self.program.clone(), &*self.user_interface);
+    /// Run the command line parser against the input tokens.
+    ///
+    /// The parser will process the input tokens based off the `CommandLineParser` configuration.
+    /// Parsing happens in two phases:
+    /// 1. Token matching aligns the tokens to arguments and options.
+    /// All tokens must be matched successfully in order to proceed to the next phase.
+    /// 2. Token capturing parses the tokens by their respective types `T`.
+    /// This phase will actually mutate your program variables.
+    ///
+    /// If at any point the parser encounters an error (ex: un-matched token, un-capturable token, etc), it will return with `Err(1)`.
+    ///
+    /// If the help switch (`-h` or `--help`) is encountered, the parser will display the help message and return with `Err(0)`.
+    /// This skips the phase #2 capturing.
+    ///
+    /// In the case of a sub-command based command line parser, this process is repeated twice.
+    /// Once for the root command line parser, and a second time for the matched sub-command.
+    /// The input tokens are partitioned based off the `Condition` parameter.
+    pub fn parse_tokens(self, tokens: &[&str]) -> Result<(), i32> {
+        let GeneralParser {
+            program,
+            command,
+            mut sub_commands,
+            user_interface,
+        } = self;
+        let command_result = command.invoke(tokens, program.clone(), &*user_interface);
 
         match command_result {
             ParseResult::Complete => Ok(()),
@@ -117,7 +140,7 @@ impl<'ap> GeneralParser<'ap> {
                 variant,
                 remaining,
             } => {
-                match self.sub_commands.remove(&variant) {
+                match sub_commands.remove(&variant) {
                     Some(sub_command) => {
                         match sub_command.invoke(
                             remaining
@@ -125,8 +148,8 @@ impl<'ap> GeneralParser<'ap> {
                                 .map(AsRef::as_ref)
                                 .collect::<Vec<&str>>()
                                 .as_slice(),
-                            format!("{program} {variant}", program = self.program),
-                            &*self.user_interface,
+                            format!("{program} {variant}"),
+                            &*user_interface,
                         ) {
                             ParseResult::Complete => Ok(()),
                             ParseResult::Incomplete { .. } => {
@@ -150,10 +173,10 @@ impl<'ap> GeneralParser<'ap> {
                         //     assert_eq!(S.to_string(), s.to_string());
                         // }
                         // ```
-                        self.user_interface.print_error(ParseError(format!(
+                        user_interface.print_error(ParseError(format!(
                             "Unknown sub-command '{variant}' for parameter '{name}'."
                         )));
-                        self.user_interface
+                        user_interface
                             .print_error_context(ErrorContext::new(variant_offset, tokens));
                         Err(1)
                     }
@@ -163,6 +186,23 @@ impl<'ap> GeneralParser<'ap> {
         }
     }
 
+    /// Run the command line parser against the Cli [`env::args`].
+    ///
+    /// The parser will process the input tokens based off the `CommandLineParser` configuration.
+    /// Parsing happens in two phases:
+    /// 1. Token matching aligns the tokens to arguments and options.
+    /// All tokens must be matched successfully in order to proceed to the next phase.
+    /// 2. Token capturing parses the tokens by their respective types `T`.
+    /// This phase will actually mutate your program variables.
+    ///
+    /// If at any point the parser encounters an error (ex: un-matched token, un-capturable token, etc), it will exit with error code `1` (via `std::process::exit`).
+    ///
+    /// If the help switch (`-h` or `--help`) is encountered, the parser will display the help message and exit with error code `0`.
+    /// This skips the phase #2 capturing.
+    ///
+    /// In the case of a sub-command based command line parser, this process is repeated twice.
+    /// Once for the root command line parser, and a second time for the matched sub-command.
+    /// The input tokens are partitioned based off the `Condition` parameter.
     pub fn parse(self) {
         let command_input: Vec<String> = env::args().skip(1).collect();
         match self.parse_tokens(

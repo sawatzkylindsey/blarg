@@ -1,16 +1,16 @@
-use blarg::{Collection, CommandParser, Nargs, Parameter};
+use blarg::{Collection, CommandLineParser, Nargs, Parameter};
 
 fn main() {
     let mut items: Vec<u32> = Vec::default();
 
-    let cp = CommandParser::new("summer");
-    let parser = cp
+    let clp = CommandLineParser::new("summer");
+    let parser = clp
         .add(
             Parameter::argument(Collection::new(&mut items, Nargs::AtLeastOne), "item")
                 .help("The items to sum."),
         )
         .build()
-        .expect("Invalid argument parser configuration");
+        .expect("The parser configuration must be valid (ex: no parameter name repeats).");
 
     parser.parse();
     let sum: u32 = items.iter().sum();
