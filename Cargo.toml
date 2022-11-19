@@ -6,6 +6,7 @@ repository = "https://github.com/sawatzkylindsey/blarg"
 keywords = ["argument", "cli", "arg", "parser", "parse"]
 categories = ["command-line-interface"]
 description = "A type-safe, domain sensitive, argument-option paradigm command line parser."
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
