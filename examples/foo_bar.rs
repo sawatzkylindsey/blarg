@@ -67,22 +67,24 @@ fn main() {
                 .choice(FooBar::Bar, "abc 123")
                 .help("foo'y bar'y stuff"),
         )
-        .add(
-            FooBar::Foo,
-            Parameter::option(Optional::new(&mut initial), "initial", None),
-        )
-        .add(
-            FooBar::Bar,
-            Parameter::option(
+        .command(FooBar::Foo, |sub| {
+            sub.add(Parameter::option(
+                Optional::new(&mut initial),
+                "initial",
+                None,
+            ))
+            .add(
+                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item")
+                    .help("The items."),
+            )
+        })
+        .command(FooBar::Bar, |sub| {
+            sub.add(Parameter::option(
                 Collection::new(&mut countries, Nargs::AtLeastOne),
                 "country",
                 None,
-            ),
-        )
-        .add(
-            FooBar::Foo,
-            Parameter::argument(Collection::new(&mut items, Nargs::Any), "item").help("The items."),
-        )
+            ))
+        })
         .build()
         .expect("Invalid argument parser configuration");
     parser.parse();

@@ -91,7 +91,7 @@ impl<'ap> CommandLineParser<'ap> {
     /// Branch into a sub-command parser.
     ///
     /// This changes the command line parser into a sub-command style command line parser.
-    /// Any parameters added before the branch apply to the root parser, while subsequent parameters from this point forward apply to the sub-commands.
+    /// Any parameters added before the branch apply to the root parser.
     ///
     /// Branching is always done with a `Scalar` `Parameter::argument` - aka: [`Condition`].
     ///
@@ -105,7 +105,9 @@ impl<'ap> CommandLineParser<'ap> {
     /// let parser = CommandLineParser::new("program")
     ///     .add(Parameter::argument(Scalar::new(&mut belongs_to_root), "belongs_to_root"))
     ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
-    ///     .add("the-command".to_string(), Parameter::argument(Scalar::new(&mut belongs_to_sub_command), "belongs_to_sub_command"))
+    ///     .command("the-command".to_string(), |sub| {
+    ///         sub.add(Parameter::argument(Scalar::new(&mut belongs_to_sub_command), "belongs_to_sub_command"))
+    ///     })
     ///     .build()
     ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
     ///
@@ -170,6 +172,43 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
         }
     }
 
+    /// Setup a sub-command.
+    ///
+    /// Sub-commands may be added arbitrarily, as long as the correspond to the branching type `B`.
+    /// If repeated for the same `variant` of `B`, only the final version will be created on the parser.
+    /// The order of sub-commands does not matter.
+    ///
+    /// ### Example
+    /// ```no_run
+    /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
+    ///
+    /// let mut value_a: u32 = 0;
+    /// let mut value_b: u32 = 0;
+    /// let mut sub_command: String = "".to_string();
+    /// let parser = CommandLineParser::new("program")
+    ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
+    ///     .command("a".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_a), "value_a")))
+    ///     .command("b".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_b), "value_b")))
+    ///     .build()
+    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///
+    /// parser.parse_tokens(vec!["a", "1"].as_slice()).unwrap();
+    ///
+    /// assert_eq!(&sub_command, "a");
+    /// assert_eq!(value_a, 1);
+    /// assert_eq!(value_b, 0);
+    /// ```
+    pub fn command(
+        mut self,
+        variant: B,
+        setup_fn: impl FnOnce(CommandLineParser<'ap>) -> CommandLineParser<'ap>,
+    ) -> Self {
+        let command_str = variant.to_string();
+        let clp = CommandLineParser::new(command_str.clone());
+        self.commands.insert(command_str, setup_fn(clp));
+        self
+    }
+
     /// Add an argument/option to the sub-command parser.
     ///
     /// The order of argument parameters corresponds to their positional order during parsing.
@@ -195,6 +234,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     /// assert_eq!(value_a, 1);
     /// assert_eq!(value_b, 0);
     /// ```
+    #[deprecated(note = "Use `SubCommandParser::command`")]
     pub fn add<T>(mut self, sub_command: B, parameter: Parameter<'ap, T>) -> Self {
         let command_str = sub_command.to_string();
         let clp = self
@@ -338,6 +378,65 @@ mod tests {
                 Some('f'),
             ))
             .branch(Condition::new(Scalar::new(&mut sub), "sub"))
+            .command(0, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items_0, Nargs::Any),
+                    "item0",
+                ))
+            })
+            .command(1, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items_1, Nargs::Any),
+                    "item1",
+                ))
+            });
+
+        // Execute
+        let parser = scp.build().unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with the various permutations.
+        parser.parse_tokens(tokens.as_slice()).unwrap();
+        assert_eq!(flag, expected_flag);
+        assert_eq!(sub, expected_sub);
+        assert_eq!(items_0, expected_items_0);
+        assert_eq!(items_1, expected_items_1);
+    }
+
+    #[rstest]
+    #[case(vec!["0"], false, 0, vec![], vec![])]
+    #[case(vec!["0", "1"], false, 0, vec![1], vec![])]
+    #[case(vec!["0", "1", "3", "2"], false, 0, vec![1, 3, 2], vec![])]
+    #[case(vec!["1"], false, 1, vec![], vec![])]
+    #[case(vec!["1", "1"], false, 1, vec![], vec![1])]
+    #[case(vec!["1", "1", "3", "2"], false, 1, vec![], vec![1, 3, 2])]
+    #[case(vec!["--flag", "0"], true, 0, vec![], vec![])]
+    #[case(vec!["--flag", "0", "1"], true, 0, vec![1], vec![])]
+    #[case(vec!["--flag", "0", "1", "3", "2"], true, 0, vec![1, 3, 2], vec![])]
+    #[case(vec!["--flag", "1"], true, 1, vec![], vec![])]
+    #[case(vec!["--flag", "1", "1"], true, 1, vec![], vec![1])]
+    #[case(vec!["--flag", "1", "1", "3", "2"], true, 1, vec![], vec![1, 3, 2])]
+    fn branch_build_backwards_compatible(
+        #[case] tokens: Vec<&str>,
+        #[case] expected_flag: bool,
+        #[case] expected_sub: u32,
+        #[case] expected_items_0: Vec<u32>,
+        #[case] expected_items_1: Vec<u32>,
+    ) {
+        // Setup
+        let mut flag: bool = false;
+        let mut sub: u32 = 0;
+        let mut items_0: Vec<u32> = Vec::default();
+        let mut items_1: Vec<u32> = Vec::default();
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
             .add(
                 0,
                 Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item0"),
@@ -358,6 +457,40 @@ mod tests {
         assert_eq!(sub, expected_sub);
         assert_eq!(items_0, expected_items_0);
         assert_eq!(items_1, expected_items_1);
+    }
+
+    #[test]
+    fn repeat_command_build() {
+        // Setup
+        let mut sub: u32 = 0;
+        let mut items_0: Vec<u32> = Vec::default();
+        let mut items_1: Vec<u32> = Vec::default();
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
+            .command(0, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items_0, Nargs::Any),
+                    "item0",
+                ))
+            })
+            .command(0, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items_1, Nargs::Any),
+                    "item1",
+                ))
+            });
+
+        // Execute
+        let parser = scp.build().unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with the various permutations.
+        parser.parse_tokens(&["0", "1", "2", "3"]).unwrap();
+        assert_eq!(sub, 0);
+        assert_eq!(items_0, Vec::default());
+        assert_eq!(items_1, vec![1, 2, 3]);
     }
 
     #[rstest]
@@ -391,10 +524,12 @@ mod tests {
             ))
             .add(Parameter::argument(Scalar::new(&mut root), "root"))
             .branch(Condition::new(Scalar::new(&mut sub), "sub"))
-            .add(
-                0,
-                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item0"),
-            );
+            .command(0, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items, Nargs::Any),
+                    "item0",
+                ))
+            });
 
         // Execute
         let parser = scp.build().unwrap();
@@ -457,6 +592,7 @@ mod tests {
 
         let message = receiver.consume_message();
         assert_contains!(message, "usage: program [-h] [-f] [ITEM ...]\n");
+        assert_contains!(message, "-f, --flag");
     }
 
     #[test]
@@ -464,8 +600,6 @@ mod tests {
         // Setup
         let mut flag: bool = false;
         let mut sub: u32 = 0;
-        let mut items_0: Vec<u32> = Vec::default();
-        let mut items_1: Vec<u32> = Vec::default();
         let clp = CommandLineParser::new("program");
         let scp = clp
             .add(Parameter::option(
@@ -478,14 +612,8 @@ mod tests {
                     .choice(0, "zero")
                     .choice(1, "one"),
             )
-            .add(
-                0,
-                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item0"),
-            )
-            .add(
-                1,
-                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item1"),
-            );
+            .command(0, |sub| sub)
+            .command(1, |sub| sub);
         let (sender, receiver) = channel_interface();
 
         // Execute
@@ -502,6 +630,100 @@ mod tests {
         assert_contains!(message, "SUB         {0, 1}");
         assert_contains!(message, "0           zero");
         assert_contains!(message, "1           one");
+        assert_contains!(message, "-f, --flag");
+    }
+
+    #[test]
+    fn sub0_command_build_help() {
+        // Setup
+        let mut flag: bool = false;
+        let mut sub: u32 = 0;
+        let mut items: Vec<u32> = Vec::default();
+        let mut extra: bool = false;
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .branch(
+                Condition::new(Scalar::new(&mut sub), "sub")
+                    .choice(0, "zero")
+                    .choice(1, "one"),
+            )
+            .command(0, |sub| sub)
+            .command(1, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items, Nargs::Any),
+                    "item",
+                ))
+                .add(Parameter::option(
+                    Switch::new(&mut extra, true),
+                    "extra",
+                    Some('e'),
+                ))
+            });
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = scp.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["0", "--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program 0 [-h]\n");
+    }
+
+    #[test]
+    fn sub1_command_build_help() {
+        // Setup
+        let mut flag: bool = false;
+        let mut sub: u32 = 0;
+        let mut items: Vec<u32> = Vec::default();
+        let mut extra: bool = false;
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .add(Parameter::option(
+                Switch::new(&mut flag, true),
+                "flag",
+                Some('f'),
+            ))
+            .branch(
+                Condition::new(Scalar::new(&mut sub), "sub")
+                    .choice(0, "zero")
+                    .choice(1, "one"),
+            )
+            .command(0, |sub| sub)
+            .command(1, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items, Nargs::Any),
+                    "item",
+                ))
+                .add(Parameter::option(
+                    Switch::new(&mut extra, true),
+                    "extra",
+                    Some('e'),
+                ))
+            });
+        let (sender, receiver) = channel_interface();
+
+        // Execute
+        let parser = scp.build_with_interface(Box::new(sender)).unwrap();
+
+        // Verify
+        // We testing that build sets up the right parser.
+        // So the verification involves invoking the parser with --help and spot-checking the output.
+        let error_code = parser.parse_tokens(&["1", "--help"]).unwrap_err();
+        assert_eq!(error_code, 0);
+
+        let message = receiver.consume_message();
+        assert_contains!(message, "usage: program 1 [-h] [-e] [ITEM ...]\n");
+        assert_contains!(message, "-e, --extra");
     }
 
     #[test]
@@ -520,10 +742,12 @@ mod tests {
             ))
             .add(Parameter::argument(Scalar::new(&mut root), "root"))
             .branch(Condition::new(Scalar::new(&mut sub), "sub"))
-            .add(
-                0,
-                Parameter::argument(Collection::new(&mut items, Nargs::Any), "item0"),
-            );
+            .command(0, |sub| {
+                sub.add(Parameter::argument(
+                    Collection::new(&mut items, Nargs::Any),
+                    "item0",
+                ))
+            });
         let (sender, receiver) = channel_interface();
 
         // Execute

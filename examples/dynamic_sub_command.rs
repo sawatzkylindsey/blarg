@@ -21,21 +21,23 @@ fn main() {
     }
 
     let clp = CommandLineParser::new("sub-command");
-    let mut clp = clp
-        .branch(condition)
-        .add(1, Parameter::argument(Scalar::new(&mut arg_1), "arg"));
+    let mut clp = clp.branch(condition).command(1, |sub| {
+        sub.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
+    });
 
     if contains_dynamic_x {
-        clp = clp.add(0, Parameter::argument(Scalar::new(&mut arg_0), "arg"));
+        clp = clp.command(0, |sub| {
+            sub.add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
+        });
     }
 
     if contains_dynamic_y {
-        clp = clp.add(2, Parameter::argument(Scalar::new(&mut arg_2), "arg"));
+        clp = clp.command(2, |sub| {
+            sub.add(Parameter::argument(Scalar::new(&mut arg_2), "arg"))
+        });
     }
 
-    let parser = clp
-        .build()
-        .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    let parser = clp.build().expect("Invalid argument parser configuration");
 
     parser.parse();
 

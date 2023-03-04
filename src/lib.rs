@@ -33,6 +33,9 @@
 //! * Fallible `Collectable`s.
 //!
 //! # Usage
+//! This documentation includes a few demos on using `blarg.`
+//! More examples are outlined in [the source](https://github.com/sawatzkylindsey/blarg/tree/main/examples).
+//!
 //! ```no_run
 #![doc = include_str!("../examples/demo_summer.rs")]
 //! ```
@@ -68,8 +71,8 @@
 //! * Whether `T` is wrapped in a container type `C` (ex: `Vec<T>` or `Option<T>`).
 //! * The cardinality of the parameter (ex: 0, 1, N, at least 1, etc).
 //!
-//! All type `T` parsing in `blarg` is underpinned by [`std::str::FromStr`].
-//! In other words, `blarg` will handle your custom type `T`, as long as it implements `std::str::FromStr`.
+//! All type `T` parsing in `blarg` is controlled by [`std::str::FromStr`].
+//! `blarg` will parse any parameter type `T`, as long as it implements `std::str::FromStr`.
 //!
 //! The other aspects of parameter configuration relate to additional Cli usage and optics:
 //! * Parameter naming, including the short name of an `Parameter::option`.
@@ -79,12 +82,12 @@
 //! * [`Scalar`]: defines a single-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
 //! This is the most common field to use in your Cli.
 //! * [`Collection`]: defines a multi-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
-//! This field allows you to configure the cardinality (aka: `Nargs`) for any collection that implements `Collectable`.
-//! `blarg` provides this implementation for `Vec<T>` and `HashSet<T>`.
+//! This field allows you to configure the cardinality (aka: `Nargs`) for any collection that implements [`Collectable`].
+//! `blarg` provides this `Collectable` implementations for `Vec<T>` and `HashSet<T>`.
 //! * [`Switch`]: defines a no-value `Parameter::option` (not applicable to `Parameter::argument`).
 //! This is used when specifying Cli *flags* (ex: `--verbose`).
 //! Note that `Switch` may apply to any type `T` (not restricted to just `bool`).
-//! * [`Optional`]: defines an optional `Parameter::option` (not applicable to `Parameter::argument`).
+//! * [`Optional`]: defines a `Parameter::option` (not applicable to `Parameter::argument`).
 //! This field is used exclusively to specify an `Option<T>` type.
 //!
 //! ### Sub-commands
@@ -94,11 +97,15 @@
 //!
 //! Branching takes a special [`Condition`] parameter which only allows a `Scalar` field.
 //! You may describe the sub-commands on the condition via [`Condition::choice`] (the same mechanism as [`Parameter::choice`]).
-//! Once `branch`ed, the result is a [`SubCommandParser`] that behaves very similar to a regular `CommandLineParser`.
-//! The difference is that `add` takes the sub-command instance to which the parameter applies.
-//! The same instance may be repeated to `add` various arguments to the sub-command.
+//! In `blarg`, any type `T` can be used to define sub-commands; sub-commands needn't only be strings.
+//! See the condition section below for further explanation.
 //!
-//! Notice, the sub-command structure is dictated solely by `add`; `choice` affects the display only.
+//! Once `branch`ed, the result is a [`SubCommandParser`] that allows you to setup individual sub-command parsers.
+//! These are controlled via [`SubCommandParser::command`], which takes the variant of `T` to which the sub-command applies, and a `impl FnOnce(CommandLineParser) -> CommandLineParser` to setup the parser.
+//! From here, anything supported in regular parsers is support in the sub-command parser.
+//!
+//! Notice, the sub-command structure is dictated solely by the usage of `command`; usage of `choice` affects the display documentation only.
+//! As a side effect of this distinction, you may include "undocumented" sub-commands (as well as "false" sub-commands), both shown in the example below.
 //!
 //! ```no_run
 #![doc = include_str!("../examples/demo_sub_command.rs")]
@@ -107,9 +114,10 @@
 //! ```console
 //! usage: sub-command [-h] SUB
 //! positional arguments:
-//!  SUB         {1, 2}
+//!  SUB         {1, 2, 3}
 //!    1           the one sub-command
 //!    2           the two sub-command
+//!    3           the three sub-command
 //! <truncated>
 //!
 //! $ sub-command 0 -h
@@ -131,18 +139,23 @@
 //! opt_0: true
 //!
 //! $ sub-command 2
-//! Parse error: Unknown sub-command '2' for parameter 'SUB'.
-//! 2
+//! Used sub-command '2'.
+//! argument-less & option-less
+//!
+//! $ sub-command 3
+//! Parse error: Unknown sub-command '3' for parameter 'SUB'.
+//! 3
 //! ^
 //! ```
 //!
 //! **Condition**<br/>
-//! There is an implicit (not compile-time enforced) requirement that `std::str::FromStr` must be inverted by [`std::fmt::Display`] for the type `T`.
-//! Put simply:
+//! In order to support arbitrary branching types `T`, we use an implicit (not compile-time enforced) requirement.
+//! Simply, `std::str::FromStr` for `T` must be inverted by [`std::fmt::Display`] for the same type `T`.
+//! In code, this means the following assertion must succeed.
 //!
 //! ```ignore
-//! let s: String;
-//! let s_prime: String = T::from_str(&s).unwrap().to_string();
+//! let s: &str = "..";
+//! let s_prime: String = T::from_str(s).unwrap().to_string();
 //! assert_eq!(s_prime, s);
 //! ```
 //!
@@ -161,16 +174,18 @@
 //! let mut value: u32 = 0;
 //!
 //! // Use `verbose` and `value` in the CommandLineParser.
-//! // `GeneralParser::parse` will assign onto of these variables.
+//! // `GeneralParser::parse` will assign onto these variables.
 //! ```
 //!
 //! We'd also like to point out: semantically, defaults only apply to options (`Parameter::option`).
 //! By definition, arguments (`Parameter::argument`) must be specified on the Cli, so having a 'default' does not make sense.
 //!
-//! In the case of `Collection` parameters (for both options and arguments), the story is a little more tricky.
-//! It is still true the initial value comes the variable initialization, but this cannot be called a 'default' in the sense of a default parameter.
-//! Rather, the collection starts off from the initialization, and then is *added to* (via [`Collectable`]) upon receiving Cli inputs.
-//! Semantically, it is an 'initial', not a 'default'.
+//! In the case of `Collection` parameters (for both options and arguments), the *initial* value again comes from the variable initialization.
+//! As parameters are received from the Cli input, these are *added to* the collection (via `Collectable`).
+//! This may be unexpected if you think of setting a default value for the `Collection`, which is then reset upon receiving input.
+//!
+//! When using `blarg`, we recommend thinking in terms of *initial* values that are later affected by the Cli invocation.
+//! In the case of non-`Collection` parameters, the initial value will be overwritten, but in the case of `Collection` parameters, the initial value will be extended.
 //!
 //! ```
 //! // The initial for the 'items' parameter is '[0, 1, 2]'.
@@ -181,7 +196,9 @@
 //! ```
 //!
 //! ### Organization
-//! It may be useful to organize your program variables into a single struct:
+//! It may be useful to organize your program variables into a single struct.
+//! We plan to support a derive Api that will automatically build out the `CommandLineParser` from such a struct in the future.
+//!
 //! ```no_run
 #![doc = include_str!("../examples/demo_organization.rs")]
 //! ```
@@ -190,19 +207,19 @@
 //! `blarg` parses the Cli tokens according to the following set of rules.
 //! By and large this syntax should be familiar to many Cli developers, with a few subtle nuances for various edge cases.
 //!
-//! * Each parameter matches a number of tokens based off it's cardinality.
+//! * Each parameter matches a number of tokens based off its cardinality.
 //! * Arguments are matched based off positional ordering.
 //! Once the expected cardinality is matched, then the parser naturally switches to the next parameter.
 //! For example, `a b c` will match `a b` into a cardinality=2 argument, and `c` into the next argument.
 //! * Options are matched based off the `--NAME` (or short name `-N`) specifier.
 //! Once specified, the cardinality is matched against the subsequent tokens.
-//! For example, `--key x y` will match `x` and `y` to the cardinality=2 option.
+//! For example, `--key x y` will match `x` and `y` into a cardinality=2 option.
 //! Again, when the expected cardinality is matched, then the parser switches to the next parameter.
 //! * In both arguments and options, the `Nargs` `*` and `+` match greedily; they never switch over to the next parameter.
 //! This greedy matching can be broken by using an option as a separator (see footnotes #2 for guidance).
 //! For example, `a b c --key value d e f` will match `a b c` into the first greedy argument, and `d e f` into the second (assuming `--key` is a cardinality=1 option).
 //! * The key-value pair of a cardinality=1 option may be separated with the `=` character.
-//! Subsequent tokens always rollover to the next parameter, even in the case of greedy `Nargs`.
+//! Subsequent tokens always rollover to the next parameter, even if the option's cardinality is greedy.
 //! For example, `--key=123` is equivalent to `--key 123`.
 //! Also notice, only the first `=` character is used as a separator.
 //! For example, `--key=123=456` is equivalent to `--key 123=456` (see footnotes #3 for guidance).
@@ -210,7 +227,7 @@
 //! For example, `-k=123` is equivalent to `--key 123`.
 //! * Multiple short named options may be combined into a single flag.
 //! For example, `-abc` is equivalent to `--apple --banana --carrot`.
-//! The `=` separator rule may be applied to the final option in this syntax.
+//! The `=` separator rule may be applied *only* to the final option in this syntax.
 //! For example, `-abc=123` is equivalent to `--apple --banana --carrot=123`.
 //!
 //!
@@ -219,7 +236,7 @@
 //! ```console
 //! Parameter         | Narg | Cardinality | Syntax           | Description
 //! -----------------------------------------------------------------------------------------------
-//! Scalar<T>         | \    | [1]         | VALUE            | precisely 1
+//! Scalar<T>         |      | [1]         | VALUE            | precisely 1
 //! Collection<C<T>>  | n    | [n]         | VALUE .. VALUE   | precisely n
 //! Collection<C<T>>  | *    | [0, ∞)      | [VALUE ...]      | any amount; captured greedily
 //! Collection<C<T>>  | +    | [1, ∞)      | VALUE [...]      | at least 1; captured greedily
@@ -229,12 +246,12 @@
 //! ```console
 //! Parameter         | Narg | Cardinality | Syntax                   | Description
 //! -------------------------------------------------------------------------------------------------
-//! Scalar<T>         | \    | [1]         | [--NAME VALUE]           | precisely 1
+//! Scalar<T>         |      | [1]         | [--NAME VALUE]           | precisely 1
 //! Collection<C<T>>  | n    | [n]         | [--NAME VALUE .. VALUE]  | precisely n
 //! Collection<C<T>>  | *    | [0, ∞)      | [--NAME [VALUE ...]]     | any amount; captured greedily
 //! Collection<C<T>>  | +    | [1, ∞)      | [--NAME VALUE [...]]     | at least 1; captured greedily
-//! Switch<T>         | \    | [0]         | [--NAME]                 | precisely 0
-//! Optional<T>       | \    | [1]         | [--NAME VALUE]           | precisely 1
+//! Switch<T>         |      | [0]         | [--NAME]                 | precisely 0
+//! Optional<T>       |      | [1]         | [--NAME VALUE]           | precisely 1
 //! ```
 //!
 //! # Footnotes

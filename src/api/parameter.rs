@@ -153,7 +153,7 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentParameter {
 /// ```
 ///
 /// However, not all types will necessarily adhere to this requirement.
-/// Observe the following enum:
+/// Observe the following example enum:
 /// ```
 /// # use std::str::FromStr;
 /// // Implement FromStr to be case-insensitive.
@@ -194,7 +194,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     /// use blarg::{Condition, Scalar};
     /// use std::str::FromStr;
     ///
-    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr`.
+    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr` with an inverse relationship.
     /// enum FooBar {
     ///     Foo,
     ///     Bar,
@@ -232,7 +232,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     }
 
     /// Document a choice in the help message for the sub-command condition.
-    /// If repeated for the same `variant`, only the final message will apply to the sub-command condition.
+    /// If repeated for the same `variant` of `T`, only the final message will apply to the sub-command condition.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
     ///
@@ -386,7 +386,7 @@ impl<'ap, T> Parameter<'ap, T> {
 
 impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
     /// Document a choice in the help message for this parameter.
-    /// If repeated for the same `variant`, only the final message will apply to the parameter.
+    /// If repeated for the same `variant` of `T`, only the final message will apply to the parameter.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
     ///
