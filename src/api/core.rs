@@ -201,11 +201,12 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     pub fn command(
         mut self,
         variant: B,
-        setup_fn: impl FnOnce(CommandLineParser<'ap>) -> CommandLineParser<'ap>,
+        setup_fn: impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap>,
     ) -> Self {
         let command_str = variant.to_string();
-        let clp = CommandLineParser::new(command_str.clone());
-        self.commands.insert(command_str, setup_fn(clp));
+        let inner = CommandLineParser::new(command_str.clone());
+        let sub_command = setup_fn(SubCommand { inner });
+        self.commands.insert(command_str, sub_command.inner);
         self
     }
 
@@ -281,6 +282,27 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
     pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
         self.build_with_interface(Box::new(ConsoleInterface::default()))
+    }
+}
+
+/// A sub-command line parser.
+///
+/// Used with `SubCommandParser::command`.
+pub struct SubCommand<'ap> {
+    inner: CommandLineParser<'ap>,
+}
+
+impl<'ap> SubCommand<'ap> {
+    /// Add an argument/option to the sub-command.
+    ///
+    /// The order of argument parameters corresponds to their positional order during parsing.
+    /// The order of option parameters does not matter.
+    ///
+    /// See `SubCommandParser::command` for usage.
+    pub fn add<T>(self, parameter: Parameter<'ap, T>) -> Self {
+        SubCommand {
+            inner: self.inner.add(parameter),
+        }
     }
 }
 

@@ -21,19 +21,19 @@ fn main() {
     }
 
     let clp = CommandLineParser::new("sub-command");
-    let mut clp = clp.branch(condition).command(1, |sub| {
-        sub.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
+    let mut clp = clp.branch(condition).command(1, |sub_command| {
+        sub_command.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
     });
 
     if contains_dynamic_x {
-        clp = clp.command(0, |sub| {
-            sub.add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
+        clp = clp.command(0, |sub_command| {
+            sub_command.add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
         });
     }
 
     if contains_dynamic_y {
-        clp = clp.command(2, |sub| {
-            sub.add(Parameter::argument(Scalar::new(&mut arg_2), "arg"))
+        clp = clp.command(2, |sub_command| {
+            sub_command.add(Parameter::argument(Scalar::new(&mut arg_2), "arg"))
         });
     }
 

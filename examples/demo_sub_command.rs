@@ -19,19 +19,20 @@ fn main() {
                 // It will appear in the documentation, but only those specified via `command(..)` actually affect the program structure.
                 .choice(3, "the three sub-command"),
         )
-        .command(0, |sub| {
-            sub.add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
+        .command(0, |sub_command| {
+            sub_command
+                .add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
                 .add(Parameter::option(
                     Switch::new(&mut opt_0, true),
                     "opt",
                     None,
                 ))
         })
-        .command(1, |sub| {
-            sub.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
+        .command(1, |sub_command| {
+            sub_command.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
         })
         // Specify an argument-less & option-less sub-command by leaving the 'sub' untouched.
-        .command(2, |sub| sub)
+        .command(2, |sub_command| sub_command)
         // Since we never add "3", it isn't a true sub-command.
         .build()
         .expect("The parser configuration must be valid (ex: no duplicate parameter names).");

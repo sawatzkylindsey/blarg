@@ -100,9 +100,9 @@
 //! In `blarg`, any type `T` can be used to define sub-commands; sub-commands needn't only be strings.
 //! See the condition section below for further explanation.
 //!
-//! Once `branch`ed, the result is a [`SubCommandParser`] that allows you to setup individual sub-command parsers.
-//! These are controlled via [`SubCommandParser::command`], which takes the variant of `T` to which the sub-command applies, and a `impl FnOnce(CommandLineParser) -> CommandLineParser` to setup the parser.
-//! From here, anything supported in regular parsers is support in the sub-command parser.
+//! Once `branch`ed, the result is a [`SubCommandParser`] that allows you to setup individual sub-commands.
+//! These are controlled via [`SubCommandParser::command`], which takes the variant of `T` to which the sub-command applies, and a `impl FnOnce(SubCommand) -> SubCommand` to setup the parser.
+//! From here, setup the sub-command via [`SubCommand::add`] (which behaves the same as `CommandLineParser::add`).
 //!
 //! Notice, the sub-command structure is dictated solely by the usage of `command`; usage of `choice` affects the display documentation only.
 //! As a side effect of this distinction, you may include "undocumented" sub-commands (as well as "false" sub-commands), both shown in the example below.
