@@ -293,6 +293,21 @@ pub struct SubCommand<'ap> {
 }
 
 impl<'ap> SubCommand<'ap> {
+    /// Build a `SubCommand` for use in testing.
+    #[cfg(feature = "unit_test")]
+    pub fn test_dummy() -> Self {
+        SubCommand {
+            inner: CommandLineParser::new("test-dummy"),
+        }
+    }
+
+    /// Build a `GeneralParser` for testing.
+    #[cfg(feature = "unit_test")]
+    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+        self.inner
+            .build_with_interface(Box::new(ConsoleInterface::default()))
+    }
+
     /// Add an argument/option to the sub-command.
     ///
     /// The order of argument parameters corresponds to their positional order during parsing.
@@ -783,5 +798,27 @@ mod tests {
 
         let message = receiver.consume_message();
         assert_contains!(message, "usage: program [-h] [-f] ROOT SUB\n");
+    }
+
+    #[test]
+    #[cfg(feature = "unit_test")]
+    fn test_dummies() {
+        // Setup
+        pub fn setup_fn<'ap>(
+            value: &'ap mut u32,
+        ) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+            |sub| sub.add(Parameter::argument(Scalar::new(value), "value"))
+        }
+
+        let sc = SubCommand::test_dummy();
+        let mut x: u32 = 1;
+        let parser = setup_fn(&mut x)(sc).build().unwrap();
+        let tokens = vec!["2"];
+
+        // Execute
+        parser.parse_tokens(tokens.as_slice());
+
+        // Verify
+        assert_eq!(x, 2);
     }
 }

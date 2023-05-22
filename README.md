@@ -41,6 +41,6 @@ Check out the rustdoc for more information.
 
     cargo build
     cargo test
-    cargo doc --open --no-deps
+    cargo doc --open --no-deps --all-features
 
     ./target/debug/examples/reducer -h

@@ -148,7 +148,7 @@
 //! ^
 //! ```
 //!
-//! **Condition**<br/>
+//! **Condition**</br>
 //! In order to support arbitrary branching types `T`, we use an implicit (not compile-time enforced) requirement.
 //! Simply, `std::str::FromStr` for `T` must be inverted by [`std::fmt::Display`] for the same type `T`.
 //! In code, this means the following assertion must succeed.
