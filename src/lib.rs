@@ -264,6 +264,8 @@
 //! In other words, you can write a custom `std::str::FromStr` deserializer.
 //! For example, `a=123,b=456` could be deserialized into `struct MyStruct { a: u32, b: u32 }`.
 //!
+//! # Features
+//! * `unit_test`: For features that help with unit testing.
 #![deny(missing_docs)]
 mod api;
 mod constant;

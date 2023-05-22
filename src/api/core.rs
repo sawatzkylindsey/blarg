@@ -55,7 +55,7 @@ impl<'ap> CommandLineParser<'ap> {
     /// The order of option parameters does not matter.
     ///
     /// ### Example
-    /// ```no_run
+    /// ```
     /// use blarg::{CommandLineParser, Parameter, Scalar};
     ///
     /// let mut a: u32 = 0;
@@ -179,7 +179,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     /// The order of sub-commands does not matter.
     ///
     /// ### Example
-    /// ```no_run
+    /// ```
     /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
     ///
     /// let mut value_a: u32 = 0;
@@ -216,7 +216,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     /// The order of option parameters does not matter.
     ///
     /// ### Example
-    /// ```no_run
+    /// ```
     /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
     ///
     /// let mut value_a: u32 = 0;
@@ -293,7 +293,24 @@ pub struct SubCommand<'ap> {
 }
 
 impl<'ap> SubCommand<'ap> {
+    /// *Available using 'unit_test' crate feature only.*</br></br>
     /// Build a `SubCommand` for use in testing.
+    ///
+    /// ### Example
+    /// ```
+    /// use blarg::{Parameter, Scalar, SubCommand};
+    ///
+    /// // Function under test.
+    /// // We want to make sure the setup_fn is wired up correctly.
+    /// pub fn setup_fn<'ap>(value: &'ap mut u32) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+    ///     |sub| sub.add(Parameter::argument(Scalar::new(value), "value"))
+    /// }
+    ///
+    /// let mut x: u32 = 1;
+    /// let parser = setup_fn(&mut x)(SubCommand::test_dummy()).build().unwrap();
+    /// parser.parse_tokens(vec!["2"].as_slice()).unwrap();
+    /// assert_eq!(x, 2);
+    /// ```
     #[cfg(feature = "unit_test")]
     pub fn test_dummy() -> Self {
         SubCommand {
@@ -301,6 +318,7 @@ impl<'ap> SubCommand<'ap> {
         }
     }
 
+    /// *Available using 'unit_test' crate feature only.*</br></br>
     /// Build a `GeneralParser` for testing.
     #[cfg(feature = "unit_test")]
     pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
@@ -810,13 +828,12 @@ mod tests {
             |sub| sub.add(Parameter::argument(Scalar::new(value), "value"))
         }
 
-        let sc = SubCommand::test_dummy();
         let mut x: u32 = 1;
-        let parser = setup_fn(&mut x)(sc).build().unwrap();
+        let parser = setup_fn(&mut x)(SubCommand::test_dummy()).build().unwrap();
         let tokens = vec!["2"];
 
         // Execute
-        parser.parse_tokens(tokens.as_slice());
+        parser.parse_tokens(tokens.as_slice()).unwrap();
 
         // Verify
         assert_eq!(x, 2);
