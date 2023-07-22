@@ -191,6 +191,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Condition, Scalar};
     /// use std::str::FromStr;
     ///
@@ -240,6 +241,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Condition, Scalar};
     /// use std::str::FromStr;
     ///
@@ -284,6 +286,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Condition, Scalar};
     ///
     /// let mut case: u32 = 0;
@@ -310,6 +313,7 @@ impl<'ap, T> Parameter<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Parameter, Switch};
     ///
     /// let mut verbose: bool = false;
@@ -336,6 +340,7 @@ impl<'ap, T> Parameter<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Parameter, Scalar};
     ///
     /// let mut verbose: bool = false;
@@ -362,6 +367,7 @@ impl<'ap, T> Parameter<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Parameter, Scalar};
     ///
     /// let mut verbose: bool = false;
@@ -394,6 +400,7 @@ impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Parameter, Scalar};
     /// use std::str::FromStr;
     ///

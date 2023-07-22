@@ -39,8 +39,8 @@ Check out the rustdoc for more information.
 
 ### Development
 
-    cargo build
-    cargo test
-    cargo doc --open --no-deps --all-features
+    cargo build --workspace
+    cargo test --workspace
+    cargo doc --open --no-deps --all-features --package blarg
 
     ./target/debug/examples/reducer -h

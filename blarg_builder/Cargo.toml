@@ -1,0 +1,17 @@
+[package]
+name = "blarg_builder"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[features]
+unit_test = []
+
+[dependencies]
+thiserror = "^1.0"
+
+[dev-dependencies]
+assert_matches = "1.5"
+empty = "0.0.4"
+rand = "^0.8"
+rstest = "^0.15"

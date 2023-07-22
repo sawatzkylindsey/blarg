@@ -19,6 +19,7 @@ impl From<InvalidConversion> for ParseError {
 ///
 /// ### Example
 /// ```
+/// # use blarg_builder as blarg;
 /// use blarg::{CommandLineParser};
 ///
 /// let parser = CommandLineParser::new("program")
@@ -56,6 +57,7 @@ impl<'ap> CommandLineParser<'ap> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{CommandLineParser, Parameter, Scalar};
     ///
     /// let mut a: u32 = 0;
@@ -97,6 +99,7 @@ impl<'ap> CommandLineParser<'ap> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{CommandLineParser, Parameter, Scalar, Condition};
     ///
     /// let mut belongs_to_root: u32 = 0;
@@ -180,6 +183,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
     ///
     /// let mut value_a: u32 = 0;
@@ -217,6 +221,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
     ///
     /// let mut value_a: u32 = 0;
@@ -298,6 +303,7 @@ impl<'ap> SubCommand<'ap> {
     ///
     /// ### Example
     /// ```
+    /// # use blarg_builder as blarg;
     /// use blarg::{Parameter, Scalar, SubCommand};
     ///
     /// // Function under test.

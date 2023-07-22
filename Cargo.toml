@@ -1,25 +1,29 @@
-[package]
-name = "blarg"
+[workspace]
+members = [
+    "blarg_builder",
+]
+
+[workspace.package]
 version = "0.2.3"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[package]
+name = "blarg"
 repository = "https://github.com/sawatzkylindsey/blarg"
 keywords = ["argument", "cli", "arg", "parser", "parse"]
 categories = ["command-line-interface"]
 description = "A type-safe, domain sensitive, argument-option paradigm command line parser."
-license = "MIT OR Apache-2.0"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package.metadata.docs.rs]
 all-features = true
 
 [features]
-unit_test = []
+unit_test = ["blarg_builder/unit_test"]
 
 [dependencies]
-thiserror = "^1.0"
-
-[dev-dependencies]
-assert_matches = "1.5"
-empty = "0.0.4"
-rand = "^0.8"
-rstest = "^0.15"
+blarg_builder = { path = "./blarg_builder" }
