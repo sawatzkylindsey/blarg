@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "blarg_builder",
+    "blarg_derive",
 ]
 
 [workspace.package]
@@ -27,3 +28,4 @@ unit_test = ["blarg_builder/unit_test"]
 
 [dependencies]
 blarg_builder = { path = "./blarg_builder" }
+blarg_derive = { path = "./blarg_derive" }
