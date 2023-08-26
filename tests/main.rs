@@ -1,15 +1,18 @@
-use blarg::{CommandLineParser, Parser};
+use blarg::{CommandLineParser, Optional, Parameter, Parser, Scalar};
 
 #[test]
-fn abc() {
+fn builder_compiles() {
     CommandLineParser::new("organization");
 }
 
 #[derive(Default, Parser)]
-struct Boo;
+struct Boo {
+    asdf: Option<usize>,
+    a: usize,
+}
 
 #[test]
 #[ignore]
-fn boo() {
-    let _boo = Boo::parse();
+fn derive_compiles() {
+    Boo::parse();
 }
