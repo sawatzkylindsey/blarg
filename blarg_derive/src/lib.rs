@@ -9,7 +9,7 @@ use proc_macro::TokenStream;
 use syn;
 use syn::__private::TokenStream2;
 
-#[proc_macro_derive(Parser, attributes(parser))]
+#[proc_macro_derive(BlargParser, attributes(blarg))]
 pub fn parser(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html
     let derive_input: syn::DeriveInput = syn::parse(input).unwrap();

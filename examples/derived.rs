@@ -1,7 +1,7 @@
-use blarg::{CommandLineParser, Optional, Parameter, Parser, Scalar};
+use blarg::{BlargParser, CommandLineParser, Optional, Parameter, Scalar};
 
-#[derive(Debug, Default, Parser)]
-#[parser(program = "abc")]
+#[derive(Debug, Default, BlargParser)]
+#[blarg(program = "abc")]
 struct Parameters {
     a: usize,
     b: usize,

@@ -7,7 +7,7 @@ use crate::parameter::DeriveParameter;
 #[derive(Debug)]
 pub struct DeriveParser {
     pub struct_name: syn::Ident,
-    pub parser: DeriveAttributes,
+    pub blarg: DeriveAttributes,
     pub parameters: Vec<DeriveParameter>,
 }
 
@@ -15,11 +15,11 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
     type Error = syn::parse::Error;
 
     fn try_from(value: syn::DeriveInput) -> Result<Self, Self::Error> {
-        let mut parser = DeriveAttributes::default();
+        let mut blarg = DeriveAttributes::default();
 
         for attribute in &value.attrs {
-            if attribute.path().is_ident("parser") {
-                parser = DeriveAttributes::from(attribute);
+            if attribute.path().is_ident("blarg") {
+                blarg = DeriveAttributes::from(attribute);
             }
         }
 
@@ -36,7 +36,7 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                 };
                 let cli_parser = DeriveParser {
                     struct_name: parser_name.clone(),
-                    parser,
+                    blarg,
                     parameters,
                 };
                 // println!("{cli_parser:?}");
@@ -53,10 +53,10 @@ impl From<DeriveParser> for TokenStream2 {
     fn from(value: DeriveParser) -> Self {
         let DeriveParser {
             struct_name,
-            parser,
+            blarg,
             parameters,
         } = value;
-        let program_name = match parser.pairs.get("program") {
+        let program_name = match blarg.pairs.get("program") {
             Some(DeriveValue::Literal(ts)) => quote! { #ts },
             None => quote! { env!("CARGO_CRATE_NAME") },
         };
