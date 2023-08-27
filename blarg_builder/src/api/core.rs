@@ -214,43 +214,6 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
         self
     }
 
-    /// Add an argument/option to the sub-command parser.
-    ///
-    /// The order of argument parameters corresponds to their positional order during parsing.
-    /// The order of option parameters does not matter.
-    ///
-    /// ### Example
-    /// ```
-    /// # use blarg_builder as blarg;
-    /// use blarg::{CommandLineParser, Condition, Parameter, Scalar};
-    ///
-    /// let mut value_a: u32 = 0;
-    /// let mut value_b: u32 = 0;
-    /// let mut sub_command: String = "".to_string();
-    /// let parser = CommandLineParser::new("program")
-    ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
-    ///     .add("a".to_string(), Parameter::argument(Scalar::new(&mut value_a), "value_a"))
-    ///     .add("b".to_string(), Parameter::argument(Scalar::new(&mut value_b), "value_b"))
-    ///     .build()
-    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
-    ///
-    /// parser.parse_tokens(vec!["a", "1"].as_slice()).unwrap();
-    ///
-    /// assert_eq!(&sub_command, "a");
-    /// assert_eq!(value_a, 1);
-    /// assert_eq!(value_b, 0);
-    /// ```
-    #[deprecated(note = "Use `SubCommandParser::command`")]
-    pub fn add<T>(mut self, sub_command: B, parameter: Parameter<'ap, T>) -> Self {
-        let command_str = sub_command.to_string();
-        let clp = self
-            .commands
-            .remove(&command_str)
-            .unwrap_or_else(|| CommandLineParser::new(command_str.clone()));
-        self.commands.insert(command_str, clp.add(parameter));
-        self
-    }
-
     fn build_with_interface(
         self,
         user_interface: Box<dyn UserInterface>,
@@ -451,61 +414,6 @@ mod tests {
                     "item1",
                 ))
             });
-
-        // Execute
-        let parser = scp.build().unwrap();
-
-        // Verify
-        // We testing that build sets up the right parser.
-        // So the verification involves invoking the parser with the various permutations.
-        parser.parse_tokens(tokens.as_slice()).unwrap();
-        assert_eq!(flag, expected_flag);
-        assert_eq!(sub, expected_sub);
-        assert_eq!(items_0, expected_items_0);
-        assert_eq!(items_1, expected_items_1);
-    }
-
-    #[rstest]
-    #[case(vec!["0"], false, 0, vec![], vec![])]
-    #[case(vec!["0", "1"], false, 0, vec![1], vec![])]
-    #[case(vec!["0", "1", "3", "2"], false, 0, vec![1, 3, 2], vec![])]
-    #[case(vec!["1"], false, 1, vec![], vec![])]
-    #[case(vec!["1", "1"], false, 1, vec![], vec![1])]
-    #[case(vec!["1", "1", "3", "2"], false, 1, vec![], vec![1, 3, 2])]
-    #[case(vec!["--flag", "0"], true, 0, vec![], vec![])]
-    #[case(vec!["--flag", "0", "1"], true, 0, vec![1], vec![])]
-    #[case(vec!["--flag", "0", "1", "3", "2"], true, 0, vec![1, 3, 2], vec![])]
-    #[case(vec!["--flag", "1"], true, 1, vec![], vec![])]
-    #[case(vec!["--flag", "1", "1"], true, 1, vec![], vec![1])]
-    #[case(vec!["--flag", "1", "1", "3", "2"], true, 1, vec![], vec![1, 3, 2])]
-    fn branch_build_backwards_compatible(
-        #[case] tokens: Vec<&str>,
-        #[case] expected_flag: bool,
-        #[case] expected_sub: u32,
-        #[case] expected_items_0: Vec<u32>,
-        #[case] expected_items_1: Vec<u32>,
-    ) {
-        // Setup
-        let mut flag: bool = false;
-        let mut sub: u32 = 0;
-        let mut items_0: Vec<u32> = Vec::default();
-        let mut items_1: Vec<u32> = Vec::default();
-        let clp = CommandLineParser::new("program");
-        let scp = clp
-            .add(Parameter::option(
-                Switch::new(&mut flag, true),
-                "flag",
-                Some('f'),
-            ))
-            .branch(Condition::new(Scalar::new(&mut sub), "sub"))
-            .add(
-                0,
-                Parameter::argument(Collection::new(&mut items_0, Nargs::Any), "item0"),
-            )
-            .add(
-                1,
-                Parameter::argument(Collection::new(&mut items_1, Nargs::Any), "item1"),
-            );
 
         // Execute
         let parser = scp.build().unwrap();

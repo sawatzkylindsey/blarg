@@ -23,8 +23,8 @@ impl FromStr for Operand {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
-            "add" => Ok(Operand::Add),
-            "multiply" => Ok(Operand::Multiply),
+            "add" | "+" => Ok(Operand::Add),
+            "multiply" | "*" => Ok(Operand::Multiply),
             _ => Err(format!("unknown: {}", value)),
         }
     }

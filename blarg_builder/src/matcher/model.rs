@@ -107,7 +107,7 @@ mod tests {
 
         for _ in 0..100 {
             let bound: Bound = thread_rng().gen();
-            let config = ArgumentConfig::new(name.clone(), bound);
+            let config = ArgumentConfig::new(name, bound);
             assert_eq!(config.name(), name);
             assert_eq!(config.bound(), bound);
         }
@@ -121,7 +121,7 @@ mod tests {
 
         for _ in 0..100 {
             let bound: Bound = thread_rng().gen();
-            let config = OptionConfig::new(name.clone(), short.clone(), bound);
+            let config = OptionConfig::new(name, short.clone(), bound);
             assert_eq!(config.name(), name);
             assert_eq!(config.short(), &short);
             assert_eq!(config.bound(), bound);
@@ -151,7 +151,7 @@ mod tests {
             &Bound::Range(_, upper) => upper > feed,
             _ => true,
         };
-        let mut pb = MatchBuffer::new(name.clone(), bound);
+        let mut pb = MatchBuffer::new(name, bound);
         assert!(pb.is_open());
         let tokens: Vec<(usize, String)> = (0..feed)
             .map(|i| (thread_rng().gen(), i.to_string()))
@@ -200,7 +200,7 @@ mod tests {
         };
         let starts_open = upper > 0;
         let remains_open = upper > feed;
-        let mut pb = MatchBuffer::new(name.clone(), bound);
+        let mut pb = MatchBuffer::new(name, bound);
         assert_eq!(pb.is_open(), starts_open);
         let tokens: Vec<(usize, String)> = (0..feed)
             .map(|i| (thread_rng().gen(), i.to_string()))
