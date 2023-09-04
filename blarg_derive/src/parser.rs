@@ -4,22 +4,20 @@ use syn::__private::TokenStream2;
 use crate::core::{DeriveAttributes, DeriveValue};
 use crate::parameter::DeriveParameter;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParser {
     pub struct_name: syn::Ident,
-    pub blarg: DeriveAttributes,
+    pub attributes: DeriveAttributes,
     pub parameters: Vec<DeriveParameter>,
 }
 
-impl TryFrom<syn::DeriveInput> for DeriveParser {
-    type Error = syn::parse::Error;
-
-    fn try_from(value: syn::DeriveInput) -> Result<Self, Self::Error> {
-        let mut blarg = DeriveAttributes::default();
+impl From<syn::DeriveInput> for DeriveParser {
+    fn from(value: syn::DeriveInput) -> Self {
+        let mut attributes = DeriveAttributes::default();
 
         for attribute in &value.attrs {
             if attribute.path().is_ident("blarg") {
-                blarg = DeriveAttributes::from(attribute);
+                attributes = DeriveAttributes::from(attribute);
             }
         }
 
@@ -36,11 +34,11 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                 };
                 let cli_parser = DeriveParser {
                     struct_name: parser_name.clone(),
-                    blarg,
+                    attributes,
                     parameters,
                 };
                 // println!("{cli_parser:?}");
-                Ok(cli_parser)
+                cli_parser
             }
             _ => {
                 todo!()
@@ -49,15 +47,17 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
     }
 }
 
-impl From<DeriveParser> for TokenStream2 {
-    fn from(value: DeriveParser) -> Self {
+impl TryFrom<DeriveParser> for TokenStream2 {
+    type Error = syn::Error;
+
+    fn try_from(value: DeriveParser) -> Result<Self, Self::Error> {
         let DeriveParser {
             struct_name,
-            blarg,
+            attributes,
             parameters,
         } = value;
-        let program_name = match blarg.pairs.get("program") {
-            Some(DeriveValue::Literal(ts)) => quote! { #ts },
+        let program_name = match attributes.pairs.get("program") {
+            Some(DeriveValue { tokens }) => quote! { #tokens },
             None => quote! { env!("CARGO_CRATE_NAME") },
         };
 
@@ -68,8 +68,8 @@ impl From<DeriveParser> for TokenStream2 {
         } else {
             let fields = parameters
                 .into_iter()
-                .map(TokenStream2::from)
-                .collect::<Vec<_>>();
+                .map(TokenStream2::try_from)
+                .collect::<Result<Vec<_>, _>>()?;
 
             quote! {
                 let mut clp = CommandLineParser::new(#program_name);
@@ -77,7 +77,7 @@ impl From<DeriveParser> for TokenStream2 {
             }
         };
 
-        quote! {
+        Ok(quote! {
             impl #struct_name {
                 fn parse() -> #struct_name {
                     let mut target = #struct_name::default();
@@ -88,6 +88,30 @@ impl From<DeriveParser> for TokenStream2 {
                 }
             }
         }
-        .into()
+        .into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn construct_direct_parser() {
+        // Setup
+        let di: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(Default, BlargParser)]
+                struct Parameters {
+                    apple: usize,
+                }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let cli_parser = DeriveParser::from(di);
+
+        // Verify
     }
 }

@@ -1,11 +1,44 @@
-use blarg::{BlargParser, CommandLineParser, Optional, Parameter, Scalar};
+#[allow(unused_imports)]
+use blarg::{
+    BlargParser, Collectable, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
+    Switch,
+};
 
 #[derive(Debug, Default, BlargParser)]
 #[blarg(program = "abc")]
 struct Parameters {
-    a: usize,
-    b: usize,
-    c: Option<usize>,
+    #[blarg(argument)]
+    apple: usize,
+    // #[blarg(option)]
+    banana_split: bool,
+    #[blarg(option, short = 'c')]
+    cucumber: Option<usize>,
+    #[blarg(option)]
+    daikon_root: usize,
+    #[blarg(option, short = 'e')]
+    edamame: usize,
+    #[blarg(option)]
+    falafel: bool,
+    #[blarg(argument)]
+    gateau: Vec<String>,
+    #[blarg(argument, collection = Nargs::Any)]
+    halwa_puri: Pair<String>,
+}
+
+#[derive(Debug, Default)]
+struct Pair<T> {
+    left: Option<T>,
+    right: Option<T>,
+}
+
+impl<T> Collectable<T> for Pair<T> {
+    fn add(&mut self, item: T) {
+        if self.left.is_none() {
+            self.left.replace(item);
+        } else if self.right.is_none() {
+            self.right.replace(item);
+        }
+    }
 }
 
 fn main() {

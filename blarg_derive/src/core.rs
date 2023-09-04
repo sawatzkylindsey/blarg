@@ -1,14 +1,27 @@
 use quote::ToTokens;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use syn::__private::TokenStream2;
 
 #[derive(Debug)]
-pub enum DeriveValue {
-    Literal(TokenStream2),
+pub struct DeriveValue {
+    pub tokens: TokenStream2,
 }
 
-#[derive(Debug, Default)]
+impl PartialEq for DeriveValue {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for DeriveValue {}
+
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct DeriveAttributes {
+    pub singletons: HashSet<String>,
     pub pairs: HashMap<String, DeriveValue>,
 }
 
@@ -17,6 +30,7 @@ impl From<&syn::Attribute> for DeriveAttributes {
         let attributes_parser =
             syn::punctuated::Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
         let attributes_parse = value.parse_args_with(attributes_parser);
+        let mut singletons = HashSet::default();
         let mut pairs = HashMap::default();
 
         for expression in
@@ -27,8 +41,15 @@ impl From<&syn::Attribute> for DeriveAttributes {
                     let left = assignment.left.to_token_stream();
                     pairs.insert(
                         left.to_string(),
-                        DeriveValue::Literal(assignment.right.to_token_stream()),
+                        DeriveValue {
+                            tokens: assignment.right.to_token_stream(),
+                        },
                     );
+                }
+                syn::Expr::Path(path) => {
+                    if let Some(ident) = path.path.get_ident() {
+                        singletons.insert(ident.to_string());
+                    }
                 }
                 _ => {
                     // TODO
@@ -36,6 +57,6 @@ impl From<&syn::Attribute> for DeriveAttributes {
             };
         }
 
-        Self { pairs }
+        Self { singletons, pairs }
     }
 }

@@ -111,17 +111,20 @@ impl Printer {
             ..
         } in &self.options
         {
+            let name_example = name.to_ascii_uppercase().replace("-", "_");
             let grammar = match nargs {
                 Nargs::Precisely(0) => "".to_string(),
                 Nargs::Precisely(n) => format!(
                     " {}",
                     (0..*n)
-                        .map(|_| name.to_ascii_uppercase())
+                        .map(|_| name_example.clone())
                         .collect::<Vec<String>>()
                         .join(" ")
                 ),
-                Nargs::Any => format!(" [{} ...]", name.to_ascii_uppercase()),
-                Nargs::AtLeastOne => format!(" {} [...]", name.to_ascii_uppercase()),
+                Nargs::Any => format!(" [{} ...]", name_example),
+                Nargs::AtLeastOne => {
+                    format!(" {} [...]", name_example)
+                }
             };
             grammars.insert(name.clone(), grammar.clone());
 
@@ -163,16 +166,19 @@ impl Printer {
             ..
         } in &self.arguments
         {
+            let name_example = name.to_ascii_uppercase().replace("-", "_");
             let grammar = match nargs {
                 Nargs::Precisely(n) => format!(
                     "{}",
                     (0..*n)
-                        .map(|_| name.to_ascii_uppercase())
+                        .map(|_| name_example.clone())
                         .collect::<Vec<String>>()
                         .join(" ")
                 ),
-                Nargs::Any => format!("[{} ...]", name.to_ascii_uppercase()),
-                Nargs::AtLeastOne => format!("{} [...]", name.to_ascii_uppercase()),
+                Nargs::Any => format!("[{} ...]", name_example),
+                Nargs::AtLeastOne => {
+                    format!("{} [...]", name_example)
+                }
             };
             grammars.insert(name.clone(), grammar.clone());
 
@@ -707,13 +713,13 @@ options:
         let printer = Printer::new(
             vec![
                 OptionParameter::basic(
-                    "car".to_string(),
+                    "car-park".to_string(),
                     Some('x'),
                     Nargs::Any,
                     Some("car message".to_string()),
                 ),
                 OptionParameter::basic(
-                    "blue".to_string(),
+                    "blue-spring".to_string(),
                     Some('y'),
                     Nargs::Precisely(0),
                     Some("blue message".to_string()),
@@ -727,12 +733,12 @@ options:
             ],
             vec![
                 ArgumentParameter::basic(
-                    "name".to_string(),
+                    "name-bob".to_string(),
                     Nargs::Precisely(1),
                     Some("name message".to_string()),
                 ),
                 ArgumentParameter::basic(
-                    "items".to_string(),
+                    "items-x".to_string(),
                     Nargs::Any,
                     Some("items message".to_string()),
                 ),
@@ -747,17 +753,17 @@ options:
         let message = interface.consume_message();
         assert_eq!(
             message,
-            r#"usage: program [-h] [-z APPLE] [-y] [-x [CAR ...]] NAME [ITEMS ...]
+            r#"usage: program [-h] [-z APPLE] [-y] [-x [CAR_PARK ...]] NAME_BOB [ITEMS_X ...]
 
 positional arguments:
- NAME                           name message
- [ITEMS ...]                    items message
+ NAME_BOB                                      name message
+ [ITEMS_X ...]                                 items message
 
 options:
- -h, --help                     Show this help message and exit.
- -z APPLE, --apple APPLE        apple message
- -y, --blue                     blue message
- -x [CAR ...], --car [CAR ...]  car message"#
+ -h, --help                                    Show this help message and exit.
+ -z APPLE, --apple APPLE                       apple message
+ -y, --blue-spring                             blue message
+ -x [CAR_PARK ...], --car-park [CAR_PARK ...]  car message"#
         );
     }
 
