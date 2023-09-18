@@ -1,31 +1,51 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{format_ident, quote};
 
-use crate::model::{DeriveParser, DeriveValue};
+use crate::model::{DeriveParser, DeriveSubParser, ParameterType};
 
-impl TryFrom<DeriveParser> for TokenStream2 {
-    type Error = syn::Error;
-
-    fn try_from(value: DeriveParser) -> Result<Self, Self::Error> {
+impl From<DeriveParser> for TokenStream2 {
+    fn from(value: DeriveParser) -> Self {
         let DeriveParser {
             struct_name,
-            attributes,
+            program_name,
             parameters,
         } = value;
-        let program_name = match attributes.pairs.get("program") {
-            Some(DeriveValue { tokens }) => quote! { #tokens },
-            None => quote! { env!("CARGO_CRATE_NAME") },
-        };
+        let program_name = program_name.tokens;
+
+        let mut sub_struct_targets = quote! {};
+
+        for parameter in &parameters {
+            if let ParameterType::Condition { commands } = &parameter.parameter_type {
+                let command_structs: Vec<TokenStream2> = commands
+                    .iter()
+                    .map(|c| {
+                        let command_struct = &c.command_struct.tokens;
+                        let field_name_target = format_ident!("{command_struct}_target");
+
+                        quote! {
+                            let mut #field_name_target = #command_struct::default();
+                        }
+                    })
+                    .collect();
+                sub_struct_targets = quote! {
+                    #( #command_structs )*
+                };
+                // There is at most 1 Condition per CommandLineParser.
+                break;
+            }
+        }
+
+        let struct_target = format_ident!("{struct_name}_target");
 
         let clp = if parameters.is_empty() {
             quote! {
                 let clp = CommandLineParser::new(#program_name);
             }
         } else {
-            let fields = parameters
+            let fields: Vec<_> = parameters
                 .into_iter()
-                .map(TokenStream2::try_from)
-                .collect::<Result<Vec<_>, _>>()?;
+                .map(|p| p.generate(&struct_target))
+                .collect();
 
             quote! {
                 let mut clp = CommandLineParser::new(#program_name);
@@ -33,36 +53,73 @@ impl TryFrom<DeriveParser> for TokenStream2 {
             }
         };
 
-        Ok(quote! {
+        quote! {
             impl #struct_name {
                 fn parse() -> #struct_name {
-                    let mut target = #struct_name::default();
+                    let mut #struct_target = #struct_name::default();
+                    #sub_struct_targets
                     #clp
                     let parser = clp.build().expect("Invalid CommandLineParser configuration");
                     parser.parse();
-                    target
+                    #struct_target
                 }
             }
         }
-        .into())
+        .into()
+    }
+}
+
+impl From<DeriveSubParser> for TokenStream2 {
+    fn from(value: DeriveSubParser) -> Self {
+        let DeriveSubParser {
+            struct_name,
+            parameters,
+        } = value;
+
+        let struct_target = format_ident!("{struct_name}_target");
+        let fields: Vec<_> = parameters
+            .into_iter()
+            .map(|p| p.generate(&struct_target))
+            .collect();
+
+        let clp = if fields.is_empty() {
+            quote! { |clp| clp }
+        } else {
+            quote! {
+                |mut clp| {
+                    #( #fields )*
+                    clp
+                }
+            }
+        };
+
+        quote! {
+                impl #struct_name {
+                    fn setup_command<'ap>(#struct_target: &'ap mut #struct_name) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+                        #clp
+                    }
+                }
+            }
+        .into()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{DeriveAttributes, DeriveParameter, ParameterType};
+    use crate::model::{Command, DeriveParameter, DeriveValue, ParameterType};
     use proc_macro2::Literal;
     use proc_macro2::Span;
     use quote::ToTokens;
-    use std::collections::HashMap;
 
     #[test]
-    fn render_derive_parameter_empty() {
+    fn render_derive_parser_empty() {
         // Setup
         let parser = DeriveParser {
             struct_name: ident("my_struct"),
-            attributes: Default::default(),
+            program_name: DeriveValue {
+                tokens: quote! { env!("CARGO_CRATE_NAME") },
+            },
             parameters: vec![],
         };
 
@@ -74,34 +131,27 @@ mod tests {
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
  fn parse () -> my_struct {
- let mut target = my_struct :: default () ;
+ let mut my_struct_target = my_struct :: default () ;
  let clp = CommandLineParser :: new (env ! ("CARGO_CRATE_NAME")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
- target }
+ my_struct_target }
  }
 "#,
         );
     }
 
     #[test]
-    fn render_derive_parameter() {
+    fn render_derive_parser() {
         // Setup
         let parser = DeriveParser {
             struct_name: ident("my_struct"),
-            attributes: DeriveAttributes {
-                singletons: Default::default(),
-                pairs: HashMap::from([(
-                    "program".to_string(),
-                    DeriveValue {
-                        tokens: Literal::string("abc").into_token_stream(),
-                    },
-                )]),
+            program_name: DeriveValue {
+                tokens: Literal::string("abc").into_token_stream(),
             },
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
-                attributes: Default::default(),
-                parameter_type: ParameterType::Scalar,
+                parameter_type: ParameterType::ScalarArgument,
             }],
         };
 
@@ -113,12 +163,118 @@ mod tests {
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
  fn parse () -> my_struct {
- let mut target = my_struct :: default () ;
+ let mut my_struct_target = my_struct :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field")) ;
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
- target }
+ my_struct_target }
+ }
+"#,
+        );
+    }
+
+    #[test]
+    fn render_derive_parser_condition() {
+        // Setup
+        let parser = DeriveParser {
+            struct_name: ident("my_struct"),
+            program_name: DeriveValue {
+                tokens: Literal::string("abc").into_token_stream(),
+            },
+            parameters: vec![DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::Condition {
+                    commands: vec![
+                        Command {
+                            variant: DeriveValue {
+                                tokens: Literal::usize_unsuffixed(0).into_token_stream(),
+                            },
+                            command_struct: DeriveValue {
+                                tokens: ident("Abc").to_token_stream(),
+                            },
+                        },
+                        Command {
+                            variant: DeriveValue {
+                                tokens: Literal::usize_unsuffixed(1).into_token_stream(),
+                            },
+                            command_struct: DeriveValue {
+                                tokens: ident("Def").to_token_stream(),
+                            },
+                        },
+                    ],
+                },
+            }],
+        };
+
+        // Execute
+        let token_stream = TokenStream2::try_from(parser).unwrap();
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"impl my_struct {
+ fn parse () -> my_struct {
+ let mut my_struct_target = my_struct :: default () ;
+ let mut Abc_target = Abc :: default () ;
+ let mut Def_target = Def :: default () ;
+ let mut clp = CommandLineParser :: new ("abc") ;
+ let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
+ clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
+ clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
+ let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
+ parser . parse () ;
+ my_struct_target }
+ }
+"#,
+        );
+    }
+
+    #[test]
+    fn render_derive_sub_parser_empty() {
+        // Setup
+        let sub_parser = DeriveSubParser {
+            struct_name: ident("my_struct"),
+            parameters: vec![],
+        };
+
+        // Execute
+        let token_stream = TokenStream2::try_from(sub_parser).unwrap();
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"impl my_struct {
+ fn setup_command < 'ap > (my_struct_target : & 'ap mut my_struct) -> impl FnOnce (SubCommand < 'ap >) -> SubCommand < 'ap > {
+ | clp | clp }
+ }
+"#,
+        );
+    }
+
+    #[test]
+    fn render_derive_sub_parser() {
+        // Setup
+        let sub_parser = DeriveSubParser {
+            struct_name: ident("my_struct"),
+            parameters: vec![DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::ScalarArgument,
+            }],
+        };
+
+        // Execute
+        let token_stream = TokenStream2::try_from(sub_parser).unwrap();
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"impl my_struct {
+ fn setup_command < 'ap > (my_struct_target : & 'ap mut my_struct) -> impl FnOnce (SubCommand < 'ap >) -> SubCommand < 'ap > {
+ | mut clp | {
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
+ clp }
+ }
  }
 "#,
         );

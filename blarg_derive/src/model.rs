@@ -21,29 +21,59 @@ impl PartialEq for DeriveValue {
 impl Eq for DeriveValue {}
 
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct DeriveAttributes {
+pub struct IntermediateAttributes {
     pub singletons: HashSet<String>,
-    pub pairs: HashMap<String, DeriveValue>,
+    pub pairs: HashMap<String, Vec<DeriveValue>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
+pub struct Command {
+    pub variant: DeriveValue,
+    pub command_struct: DeriveValue,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum ParameterType {
-    Collection,
-    Optional,
-    Scalar,
-    Switch,
+    CollectionArgument {
+        nargs: DeriveValue,
+    },
+    ScalarArgument,
+
+    CollectionOption {
+        nargs: DeriveValue,
+        short: Option<DeriveValue>,
+    },
+    OptionalOption {
+        short: Option<DeriveValue>,
+    },
+    ScalarOption {
+        short: Option<DeriveValue>,
+    },
+
+    Switch {
+        short: Option<DeriveValue>,
+    },
+
+    Condition {
+        commands: Vec<Command>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParameter {
     pub field_name: syn::Ident,
-    pub attributes: DeriveAttributes,
     pub parameter_type: ParameterType,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParser {
     pub struct_name: syn::Ident,
-    pub attributes: DeriveAttributes,
+    pub program_name: DeriveValue,
+    pub parameters: Vec<DeriveParameter>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeriveSubParser {
+    pub struct_name: syn::Ident,
     pub parameters: Vec<DeriveParameter>,
 }
