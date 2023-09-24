@@ -238,6 +238,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     /// Needn't be exhaustive.
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
+    /// To limit the parser semantics, be sure to use an enum.
     ///
     /// ### Example
     /// ```
@@ -397,6 +398,7 @@ impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
     /// Needn't be exhaustive.
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
+    /// To limit the parser semantics, be sure to use an enum.
     ///
     /// ### Example
     /// ```

@@ -27,7 +27,7 @@ pub fn parser(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(BlargSubParser, attributes(blarg))]
+#[proc_macro_derive(BlargSubParser)]
 pub fn sub_parser(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html
     let derive_input: syn::DeriveInput = syn::parse(input).unwrap();

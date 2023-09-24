@@ -7,10 +7,12 @@ impl From<DeriveParser> for TokenStream2 {
     fn from(value: DeriveParser) -> Self {
         let DeriveParser {
             struct_name,
-            program_name,
+            program,
+            initializer,
             parameters,
         } = value;
-        let program_name = program_name.tokens;
+        let program = program.tokens;
+        let initializer = initializer.tokens;
 
         let mut sub_struct_targets = quote! {};
 
@@ -23,7 +25,7 @@ impl From<DeriveParser> for TokenStream2 {
                         let field_name_target = format_ident!("{command_struct}_target");
 
                         quote! {
-                            let mut #field_name_target = #command_struct::default();
+                            let mut #field_name_target = #command_struct::#initializer();
                         }
                     })
                     .collect();
@@ -39,7 +41,7 @@ impl From<DeriveParser> for TokenStream2 {
 
         let clp = if parameters.is_empty() {
             quote! {
-                let clp = CommandLineParser::new(#program_name);
+                let clp = CommandLineParser::new(#program);
             }
         } else {
             let fields: Vec<_> = parameters
@@ -48,7 +50,7 @@ impl From<DeriveParser> for TokenStream2 {
                 .collect();
 
             quote! {
-                let mut clp = CommandLineParser::new(#program_name);
+                let mut clp = CommandLineParser::new(#program);
                 #( #fields )*
             }
         };
@@ -56,7 +58,7 @@ impl From<DeriveParser> for TokenStream2 {
         quote! {
             impl #struct_name {
                 fn parse() -> #struct_name {
-                    let mut #struct_target = #struct_name::default();
+                    let mut #struct_target = #struct_name::#initializer();
                     #sub_struct_targets
                     #clp
                     let parser = clp.build().expect("Invalid CommandLineParser configuration");
@@ -117,7 +119,10 @@ mod tests {
         // Setup
         let parser = DeriveParser {
             struct_name: ident("my_struct"),
-            program_name: DeriveValue {
+            initializer: DeriveValue {
+                tokens: quote! { default }.into_token_stream(),
+            },
+            program: DeriveValue {
                 tokens: quote! { env!("CARGO_CRATE_NAME") },
             },
             parameters: vec![],
@@ -146,12 +151,16 @@ mod tests {
         // Setup
         let parser = DeriveParser {
             struct_name: ident("my_struct"),
-            program_name: DeriveValue {
+            program: DeriveValue {
                 tokens: Literal::string("abc").into_token_stream(),
+            },
+            initializer: DeriveValue {
+                tokens: quote! { default }.into_token_stream(),
             },
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                help: None,
             }],
         };
 
@@ -179,8 +188,11 @@ mod tests {
         // Setup
         let parser = DeriveParser {
             struct_name: ident("my_struct"),
-            program_name: DeriveValue {
+            program: DeriveValue {
                 tokens: Literal::string("abc").into_token_stream(),
+            },
+            initializer: DeriveValue {
+                tokens: quote! { default }.into_token_stream(),
             },
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
@@ -204,6 +216,7 @@ mod tests {
                         },
                     ],
                 },
+                help: None,
             }],
         };
 
@@ -260,6 +273,7 @@ mod tests {
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                help: None,
             }],
         };
 

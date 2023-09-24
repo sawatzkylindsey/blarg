@@ -5,16 +5,15 @@ use blarg::{
 };
 
 #[derive(Debug, Default, BlargParser)]
-#[blarg(program = "abc")]
 struct Parameters {
-    #[blarg(argument)]
+    #[blarg(argument, help = "just apple things")]
     apple: usize,
     // #[blarg(option)]
     banana_split: bool,
     #[blarg(option, short = 'c')]
     cucumber: Option<usize>,
-    #[blarg(option)]
-    daikon_root: usize,
+    #[blarg(option, help = "abc 123")]
+    daikon_root: Vec<usize>,
     #[blarg(option, short = 'e')]
     edamame: usize,
     #[blarg(option)]

@@ -26,6 +26,16 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
             }
             None => quote! { env!("CARGO_CRATE_NAME") },
         };
+        let initializer = match attributes.pairs.get("initializer") {
+            Some(values) => {
+                let tokens = &values
+                    .first()
+                    .expect("attribute pair 'initializer' must contain non-empty values")
+                    .tokens;
+                quote! { #tokens }
+            }
+            None => quote! { default },
+        };
         let parser_name = &value.ident;
 
         match &value.data {
@@ -61,8 +71,11 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
 
                 let cli_parser = DeriveParser {
                     struct_name: parser_name.clone(),
-                    program_name: DeriveValue {
+                    program: DeriveValue {
                         tokens: program.into(),
+                    },
+                    initializer: DeriveValue {
+                        tokens: initializer.into(),
                     },
                     parameters,
                 };
@@ -95,6 +108,24 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
                         .collect::<Result<Vec<_>, _>>()?,
                     syn::DataStruct { .. } => Vec::default(),
                 };
+
+                let conditions: Vec<&syn::Ident> = parameters
+                    .iter()
+                    .filter_map(|p| match &p.parameter_type {
+                        ParameterType::Condition { .. } => Some(&p.field_name),
+                        _ => None,
+                    })
+                    .collect();
+                if conditions.len() > 0 {
+                    return Err(syn::Error::new(
+                        value.ident.span(),
+                        format!(
+                            "Invalid - sub-parser cannot have any conditions: {:?}.",
+                            conditions.iter().map(|i| i.to_string()).collect::<Vec<_>>(),
+                        ),
+                    ));
+                }
+
                 let cli_sub_parser = DeriveSubParser {
                     struct_name: parser_name.clone(),
                     parameters,
@@ -136,8 +167,11 @@ mod tests {
             derive_parser,
             DeriveParser {
                 struct_name: ident("Parameters"),
-                program_name: DeriveValue {
+                program: DeriveValue {
                     tokens: quote! { env!("CARGO_CRATE_NAME") }
+                },
+                initializer: DeriveValue {
+                    tokens: quote! { default }.into_token_stream()
                 },
                 parameters: Vec::default(),
             }
@@ -165,12 +199,16 @@ mod tests {
             derive_parser,
             DeriveParser {
                 struct_name: ident("Parameters"),
-                program_name: DeriveValue {
+                program: DeriveValue {
                     tokens: quote! { env!("CARGO_CRATE_NAME") }
+                },
+                initializer: DeriveValue {
+                    tokens: quote! { default }.into_token_stream()
                 },
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    help: None,
                 }],
             }
         );
@@ -198,12 +236,16 @@ mod tests {
             derive_parser,
             DeriveParser {
                 struct_name: ident("Parameters"),
-                program_name: DeriveValue {
+                program: DeriveValue {
                     tokens: Literal::string("abc").into_token_stream()
+                },
+                initializer: DeriveValue {
+                    tokens: quote! { default }.into_token_stream()
                 },
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    help: None,
                 }],
             }
         );
@@ -283,8 +325,34 @@ mod tests {
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    help: None,
                 }],
             }
+        );
+    }
+
+    #[test]
+    fn construct_derive_sub_parser_with_condition() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(Default, BlargSubParser)]
+                struct Parameters {
+                    #[blarg(command = (0, Abc))]
+                    apple: usize,
+                }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let error = DeriveSubParser::try_from(input).unwrap_err();
+
+        // Verify
+        // Verify
+        assert_eq!(
+            error.to_string(),
+            "Invalid - sub-parser cannot have any conditions: [\"apple\"]."
         );
     }
 

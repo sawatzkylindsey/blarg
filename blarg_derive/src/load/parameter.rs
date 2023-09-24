@@ -44,6 +44,17 @@ impl TryFrom<&syn::Field> for DeriveParameter {
                 },
             ),
         };
+        let help = match attributes.pairs.get("help") {
+            Some(values) => {
+                let tokens = values
+                    .first()
+                    .expect("attribute pair 'help' must contain non-empty values")
+                    .tokens
+                    .clone();
+                Some(DeriveValue { tokens })
+            }
+            None => None,
+        };
         let commands: Option<&Vec<DeriveValue>> = attributes.pairs.get("command");
         let explicit_command = commands.is_some();
 
@@ -149,6 +160,7 @@ impl TryFrom<&syn::Field> for DeriveParameter {
         Ok(DeriveParameter {
             field_name: value.ident.clone().unwrap(),
             parameter_type,
+            help,
         })
     }
 }
@@ -161,6 +173,14 @@ fn build_command(
     match expression {
         syn::Expr::Tuple(tuple) => match (tuple.elems.first(), tuple.elems.last()) {
             (Some(syn::Expr::Lit(left)), Some(syn::Expr::Path(right))) => Ok(Command {
+                variant: DeriveValue {
+                    tokens: left.to_token_stream(),
+                },
+                command_struct: DeriveValue {
+                    tokens: right.to_token_stream(),
+                },
+            }),
+            (Some(syn::Expr::Path(left)), Some(syn::Expr::Path(right))) => Ok(Command {
                 variant: DeriveValue {
                     tokens: left.to_token_stream(),
                 },
@@ -261,7 +281,7 @@ mod tests {
         let _ = DeriveParameter::try_from(&input).unwrap();
     }
 
-    // Implicit construction
+    //# Implicit construction
 
     #[test]
     fn construct_scalar_argument() {
@@ -295,6 +315,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                help: None,
             }
         );
     }
@@ -336,6 +357,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::OptionalOption { short: None },
+                help: None,
             }
         );
     }
@@ -384,6 +406,7 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     }),
                 },
+                help: None,
             }
         );
     }
@@ -420,6 +443,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::Switch { short: None },
+                help: None,
             }
         );
     }
@@ -465,11 +489,54 @@ mod tests {
                         tokens: quote! { Nargs::AtLeastOne }
                     }
                 },
+                help: None,
             }
         );
     }
 
-    // Explicit construction
+    #[test]
+    fn construct_with_help() {
+        // Setup
+        let mut segments = syn::punctuated::Punctuated::new();
+        segments.push_value(PathSegment {
+            ident: ident("usize"),
+            arguments: PathArguments::None,
+        });
+        let attribute: syn::Attribute = parse_quote! {
+            #[blarg(help = "abc 123")]
+        };
+        let input: syn::Field = syn::Field {
+            attrs: vec![attribute],
+            vis: syn::Visibility::Inherited,
+            mutability: syn::FieldMutability::None,
+            ident: Some(ident("my_field")),
+            colon_token: None,
+            ty: syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::Path {
+                    leading_colon: None,
+                    segments,
+                },
+            }),
+        };
+
+        // Execute
+        let derive_parameter = DeriveParameter::try_from(&input).unwrap();
+
+        // Verify
+        assert_eq!(
+            derive_parameter,
+            DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::ScalarArgument,
+                help: Some(DeriveValue {
+                    tokens: Literal::string("abc 123").to_token_stream(),
+                }),
+            }
+        );
+    }
+
+    //# Explicit construction
 
     #[test]
     fn construct_scalar_option() {
@@ -506,6 +573,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarOption { short: None },
+                help: None,
             }
         );
     }
@@ -549,12 +617,13 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     })
                 },
+                help: None,
             }
         );
     }
 
     #[test]
-    fn construct_condition() {
+    fn construct_condition_lit() {
         // Setup
         let mut segments = syn::punctuated::Punctuated::new();
         segments.push_value(PathSegment {
@@ -606,7 +675,69 @@ mod tests {
                             }
                         }
                     ]
-                }
+                },
+                help: None,
+            }
+        );
+    }
+
+    #[test]
+    fn construct_condition_path() {
+        // Setup
+        let mut segments = syn::punctuated::Punctuated::new();
+        segments.push_value(PathSegment {
+            ident: ident("usize"),
+            arguments: PathArguments::None,
+        });
+        let attribute: syn::Attribute = parse_quote! {
+            #[blarg(command = (Foo::Bar, Abc), command = (Foo::Baz, Def))]
+        };
+        let input: syn::Field = syn::Field {
+            attrs: vec![attribute],
+            vis: syn::Visibility::Inherited,
+            mutability: syn::FieldMutability::None,
+            ident: Some(ident("my_field")),
+            colon_token: None,
+            ty: syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::Path {
+                    leading_colon: None,
+                    segments,
+                },
+            }),
+        };
+
+        // Execute
+        let derive_parameter = DeriveParameter::try_from(&input).unwrap();
+
+        // Verify
+        let foo_bar: syn::Path = parse_quote! { Foo::Bar };
+        let foo_baz: syn::Path = parse_quote! { Foo::Baz };
+        assert_eq!(
+            derive_parameter,
+            DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::Condition {
+                    commands: vec![
+                        Command {
+                            variant: DeriveValue {
+                                tokens: foo_bar.to_token_stream(),
+                            },
+                            command_struct: DeriveValue {
+                                tokens: ident("Abc").to_token_stream(),
+                            }
+                        },
+                        Command {
+                            variant: DeriveValue {
+                                tokens: foo_baz.to_token_stream(),
+                            },
+                            command_struct: DeriveValue {
+                                tokens: ident("Def").to_token_stream(),
+                            }
+                        }
+                    ]
+                },
+                help: None,
             }
         );
     }
@@ -656,6 +787,7 @@ mod tests {
                     },
                     short: None,
                 },
+                help: None,
             }
         );
     }
@@ -707,7 +839,8 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     }),
                 },
-            }
+                help: None,
+            },
         );
     }
 
@@ -746,11 +879,12 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
-            }
+                help: None,
+            },
         );
     }
 
-    // Invalid construction
+    //# Invalid construction
 
     #[test]
     fn construct_argument_option() {
@@ -894,7 +1028,7 @@ mod tests {
         assert_contains!(error.to_string(), "found `abc`");
     }
 
-    // Invalid construction via implicit
+    //# Invalid construction via implicit
 
     #[test]
     fn construct_command_option_implicit() {

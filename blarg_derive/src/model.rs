@@ -63,12 +63,14 @@ pub enum ParameterType {
 pub struct DeriveParameter {
     pub field_name: syn::Ident,
     pub parameter_type: ParameterType,
+    pub help: Option<DeriveValue>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParser {
     pub struct_name: syn::Ident,
-    pub program_name: DeriveValue,
+    pub program: DeriveValue,
+    pub initializer: DeriveValue,
     pub parameters: Vec<DeriveParameter>,
 }
 
