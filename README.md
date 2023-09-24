@@ -7,9 +7,40 @@ Check out the rustdoc for more information.
 * **arg** for argument parser.
 * **bl**arg because all the other names are already taken.
 
-### Example
+### Derive Example
+
+    use blarg::{BlargParser, CommandLineParser, Parameter, Scalar, Switch};
+    
+    #[derive(Debug, Default, BlargParser)]
+    #[blarg(program = "example")]
+    struct Parameters {
+        #[blarg(short = 'v')]
+        verbose: bool,
+        value: u32,
+    }
+    
+    fn main() {
+        let parameters = Parameters::parse();
+        println!(
+            "value: {}, verbose: {}",
+            parameters.value, parameters.verbose
+        );
+    }
+
+    $ ./main -h
+    usage: example [-h] [-v] VALUE
+    
+    positional arguments:
+     VALUE
+    
+    options:
+     -h, --help     Show this help message and exit.
+     -v, --verbose
+
+### Builder Example
 
     use blarg::{CommandLineParser, Parameter, Scalar, Switch};
+    
     fn main() {
         let mut verbose: bool = false;
         let mut value: u32 = 0;
