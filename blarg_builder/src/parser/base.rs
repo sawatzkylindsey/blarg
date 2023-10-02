@@ -6,8 +6,8 @@ use crate::matcher::*;
 
 // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
 // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
-pub(crate) type OptionCapture<'ap> = (OptionConfig, Box<(dyn AnonymousCapturable + 'ap)>);
-pub(crate) type ArgumentCapture<'ap> = (ArgumentConfig, Box<(dyn AnonymousCapturable + 'ap)>);
+pub(crate) type OptionCapture<'a> = (OptionConfig, Box<(dyn AnonymousCapturable + 'a)>);
+pub(crate) type ArgumentCapture<'a> = (ArgumentConfig, Box<(dyn AnonymousCapturable + 'a)>);
 
 #[derive(Debug, Error)]
 #[error("Config error: {0}")]
@@ -69,34 +69,33 @@ pub mod test {
     }
 }
 
-pub(crate) struct Parser<'ap> {
+pub(crate) struct Parser<'a> {
     token_matcher: TokenMatcher,
-    captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>>,
+    captures: HashMap<String, Box<(dyn AnonymousCapturable + 'a)>>,
     discriminator: Option<String>,
 }
 
-impl<'ap> std::fmt::Debug for Parser<'ap> {
+impl<'a> std::fmt::Debug for Parser<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Parser{..}").finish()
     }
 }
 
-impl<'ap> Parser<'ap> {
+impl<'a> Parser<'a> {
     #[cfg(test)]
     pub(crate) fn empty() -> Self {
         Self::new(Vec::default(), Vec::default(), None).unwrap()
     }
 
     pub(crate) fn new(
-        options: Vec<OptionCapture<'ap>>,
-        arguments: Vec<ArgumentCapture<'ap>>,
+        options: Vec<OptionCapture<'a>>,
+        arguments: Vec<ArgumentCapture<'a>>,
         discriminator: Option<String>,
     ) -> Result<Self, ConfigError> {
         let help_config = OptionConfig::new(HELP_NAME, Some(HELP_SHORT), Bound::Range(0, 0));
         let mut option_configs = HashSet::from([help_config]);
         let mut argument_configs = VecDeque::default();
-        let mut captures: HashMap<String, Box<(dyn AnonymousCapturable + 'ap)>> =
-            HashMap::default();
+        let mut captures: HashMap<String, Box<(dyn AnonymousCapturable + 'a)>> = HashMap::default();
 
         for (oc, f) in options.into_iter() {
             if captures.insert(oc.name().to_string(), f).is_some() {

@@ -8,17 +8,17 @@ use crate::parser::ErrorContext;
 
 /// The configured command line parser.
 /// Built via `CommandLineParser::build` or `SubCommandParser::build`.
-pub struct GeneralParser<'ap> {
+pub struct GeneralParser<'a> {
     program: String,
-    command: ParseUnit<'ap>,
-    sub_commands: HashMap<String, ParseUnit<'ap>>,
+    command: ParseUnit<'a>,
+    sub_commands: HashMap<String, ParseUnit<'a>>,
     user_interface: Box<dyn UserInterface>,
 }
 
-impl<'ap> GeneralParser<'ap> {
+impl<'a> GeneralParser<'a> {
     pub(crate) fn command(
         program: impl Into<String>,
-        command: ParseUnit<'ap>,
+        command: ParseUnit<'a>,
         user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
@@ -31,8 +31,8 @@ impl<'ap> GeneralParser<'ap> {
 
     pub(crate) fn sub_command(
         program: impl Into<String>,
-        command: ParseUnit<'ap>,
-        sub_commands: HashMap<String, ParseUnit<'ap>>,
+        command: ParseUnit<'a>,
+        sub_commands: HashMap<String, ParseUnit<'a>>,
         user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
@@ -44,18 +44,18 @@ impl<'ap> GeneralParser<'ap> {
     }
 }
 
-pub(crate) struct ParseUnit<'ap> {
-    parser: Parser<'ap>,
+pub(crate) struct ParseUnit<'a> {
+    parser: Parser<'a>,
     printer: Printer,
 }
 
-impl<'ap> ParseUnit<'ap> {
+impl<'a> ParseUnit<'a> {
     #[cfg(test)]
     pub(crate) fn empty() -> Self {
         Self::new(Parser::empty(), Printer::empty())
     }
 
-    pub(crate) fn new(parser: Parser<'ap>, printer: Printer) -> Self {
+    pub(crate) fn new(parser: Parser<'a>, printer: Printer) -> Self {
         Self { parser, printer }
     }
 
@@ -105,7 +105,7 @@ enum ParseResult {
     Exit(i32),
 }
 
-impl<'ap> GeneralParser<'ap> {
+impl<'a> GeneralParser<'a> {
     /// Run the command line parser against the input tokens.
     ///
     /// The parser will process the input tokens based off the `CommandLineParser` configuration.

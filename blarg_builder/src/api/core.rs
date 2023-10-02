@@ -28,16 +28,16 @@ impl From<InvalidConversion> for ParseError {
 ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
 /// parser.parse_tokens(empty::slice()).unwrap();
 /// ```
-pub struct CommandLineParser<'ap> {
+pub struct CommandLineParser<'a> {
     program: String,
     option_parameters: Vec<OptionParameter>,
     argument_parameters: Vec<ArgumentParameter>,
-    option_captures: Vec<OptionCapture<'ap>>,
-    argument_captures: Vec<ArgumentCapture<'ap>>,
+    option_captures: Vec<OptionCapture<'a>>,
+    argument_captures: Vec<ArgumentCapture<'a>>,
     discriminator: Option<String>,
 }
 
-impl<'ap> CommandLineParser<'ap> {
+impl<'a> CommandLineParser<'a> {
     /// Create a command line parser.
     pub fn new(program: impl Into<String>) -> Self {
         Self {
@@ -73,7 +73,7 @@ impl<'ap> CommandLineParser<'ap> {
     /// assert_eq!(a, 1);
     /// assert_eq!(b, 2);
     /// ```
-    pub fn add<T>(mut self, parameter: Parameter<'ap, T>) -> Self {
+    pub fn add<T>(mut self, parameter: Parameter<'a, T>) -> Self {
         let inner = parameter.consume();
         match inner.class() {
             ParameterClass::Opt => {
@@ -122,8 +122,8 @@ impl<'ap> CommandLineParser<'ap> {
     /// ```
     pub fn branch<T: std::str::FromStr + std::fmt::Display>(
         mut self,
-        condition: Condition<'ap, T>,
-    ) -> SubCommandParser<'ap, T> {
+        condition: Condition<'a, T>,
+    ) -> SubCommandParser<'a, T> {
         let parameter = condition.consume();
         if self.discriminator.replace(parameter.name()).is_some() {
             unreachable!("internal error - cannot setup multiple discriminators");
@@ -135,7 +135,7 @@ impl<'ap> CommandLineParser<'ap> {
     fn build_with_interface(
         self,
         user_interface: Box<dyn UserInterface>,
-    ) -> Result<GeneralParser<'ap>, ConfigError> {
+    ) -> Result<GeneralParser<'a>, ConfigError> {
         let parser = Parser::new(
             self.option_captures,
             self.argument_captures,
@@ -154,20 +154,20 @@ impl<'ap> CommandLineParser<'ap> {
 
     /// Build the command line parser.
     /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
-    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
         self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
 }
 
 /// The sub-command parser.
-pub struct SubCommandParser<'ap, B: std::fmt::Display> {
-    root: CommandLineParser<'ap>,
-    commands: HashMap<String, CommandLineParser<'ap>>,
+pub struct SubCommandParser<'a, B: std::fmt::Display> {
+    root: CommandLineParser<'a>,
+    commands: HashMap<String, CommandLineParser<'a>>,
     _phantom: PhantomData<B>,
 }
 
-impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
-    fn new(root: CommandLineParser<'ap>) -> Self {
+impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
+    fn new(root: CommandLineParser<'a>) -> Self {
         Self {
             root,
             commands: HashMap::default(),
@@ -205,7 +205,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     pub fn command(
         mut self,
         variant: B,
-        setup_fn: impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap>,
+        setup_fn: impl FnOnce(SubCommand<'a>) -> SubCommand<'a>,
     ) -> Self {
         let command_str = variant.to_string();
         let inner = CommandLineParser::new(command_str.clone());
@@ -217,7 +217,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
     fn build_with_interface(
         self,
         user_interface: Box<dyn UserInterface>,
-    ) -> Result<GeneralParser<'ap>, ConfigError> {
+    ) -> Result<GeneralParser<'a>, ConfigError> {
         let mut sub_commands = HashMap::default();
 
         for (discriminee, cp) in self.commands.into_iter() {
@@ -248,7 +248,7 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
 
     /// Build the sub-command based command line parser.
     /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
-    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
         self.build_with_interface(Box::new(ConsoleInterface::default()))
     }
 }
@@ -256,11 +256,11 @@ impl<'ap, B: std::fmt::Display> SubCommandParser<'ap, B> {
 /// A sub-command line parser.
 ///
 /// Used with `SubCommandParser::command`.
-pub struct SubCommand<'ap> {
-    inner: CommandLineParser<'ap>,
+pub struct SubCommand<'a> {
+    inner: CommandLineParser<'a>,
 }
 
-impl<'ap> SubCommand<'ap> {
+impl<'a> SubCommand<'a> {
     /// *Available using 'unit_test' crate feature only.*</br></br>
     /// Build a `SubCommand` for use in testing.
     ///
@@ -271,7 +271,7 @@ impl<'ap> SubCommand<'ap> {
     ///
     /// // Function under test.
     /// // We want to make sure the setup_fn is wired up correctly.
-    /// pub fn setup_fn<'ap>(value: &'ap mut u32) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+    /// pub fn setup_fn<'a>(value: &'a mut u32) -> impl FnOnce(SubCommand<'a>) -> SubCommand<'a> {
     ///     |sub| sub.add(Parameter::argument(Scalar::new(value), "value"))
     /// }
     ///
@@ -290,7 +290,7 @@ impl<'ap> SubCommand<'ap> {
     /// *Available using 'unit_test' crate feature only.*</br></br>
     /// Build a `GeneralParser` for testing.
     #[cfg(feature = "unit_test")]
-    pub fn build(self) -> Result<GeneralParser<'ap>, ConfigError> {
+    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
         self.inner
             .build_with_interface(Box::new(ConsoleInterface::default()))
     }
@@ -301,7 +301,7 @@ impl<'ap> SubCommand<'ap> {
     /// The order of option parameters does not matter.
     ///
     /// See `SubCommandParser::command` for usage.
-    pub fn add<T>(self, parameter: Parameter<'ap, T>) -> Self {
+    pub fn add<T>(self, parameter: Parameter<'a, T>) -> Self {
         SubCommand {
             inner: self.inner.add(parameter),
         }
@@ -737,9 +737,7 @@ mod tests {
     #[cfg(feature = "unit_test")]
     fn test_dummies() {
         // Setup
-        pub fn setup_fn<'ap>(
-            value: &'ap mut u32,
-        ) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+        pub fn setup_fn<'a>(value: &'a mut u32) -> impl FnOnce(SubCommand<'a>) -> SubCommand<'a> {
             |sub| sub.add(Parameter::argument(Scalar::new(value), "value"))
         }
 

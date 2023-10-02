@@ -8,19 +8,19 @@ use crate::parser::{
 use crate::prelude::Choices;
 use std::collections::HashMap;
 
-pub(crate) struct AnonymousCapture<'ap, T: 'ap> {
-    field: Box<dyn GenericCapturable<'ap, T> + 'ap>,
+pub(crate) struct AnonymousCapture<'a, T: 'a> {
+    field: Box<dyn GenericCapturable<'a, T> + 'a>,
 }
 
-impl<'ap, T> AnonymousCapture<'ap, T> {
-    pub(crate) fn bind(field: impl GenericCapturable<'ap, T> + 'ap) -> Self {
+impl<'a, T> AnonymousCapture<'a, T> {
+    pub(crate) fn bind(field: impl GenericCapturable<'a, T> + 'a) -> Self {
         Self {
             field: Box::new(field),
         }
     }
 }
 
-impl<'ap, T> AnonymousCapturable for AnonymousCapture<'ap, T> {
+impl<'a, T> AnonymousCapturable for AnonymousCapture<'a, T> {
     fn matched(&mut self) {
         self.field.matched();
     }
@@ -36,9 +36,9 @@ pub(super) enum ParameterClass {
     Arg,
 }
 
-pub(super) struct ParameterInner<'ap, T> {
+pub(super) struct ParameterInner<'a, T> {
     class: ParameterClass,
-    field: AnonymousCapture<'ap, T>,
+    field: AnonymousCapture<'a, T>,
     nargs: Nargs,
     name: String,
     short: Option<char>,
@@ -46,13 +46,13 @@ pub(super) struct ParameterInner<'ap, T> {
     choices: HashMap<String, String>,
 }
 
-impl<'ap, T> ParameterInner<'ap, T> {
+impl<'a, T> ParameterInner<'a, T> {
     pub(super) fn class(&self) -> ParameterClass {
         self.class
     }
 }
 
-impl<'ap, T> std::fmt::Debug for ParameterInner<'ap, T> {
+impl<'a, T> std::fmt::Debug for ParameterInner<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let class = match &self.class {
             ParameterClass::Opt => "Opt",
@@ -84,8 +84,8 @@ impl<'ap, T> std::fmt::Debug for ParameterInner<'ap, T> {
     }
 }
 
-impl<'ap, T> From<&ParameterInner<'ap, T>> for OptionConfig {
-    fn from(value: &ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<&ParameterInner<'a, T>> for OptionConfig {
+    fn from(value: &ParameterInner<'a, T>) -> Self {
         OptionConfig::new(
             value.name.clone(),
             value.short.clone(),
@@ -94,16 +94,16 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for OptionConfig {
     }
 }
 
-impl<'ap, T> From<ParameterInner<'ap, T>> for OptionCapture<'ap> {
-    fn from(value: ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<ParameterInner<'a, T>> for OptionCapture<'a> {
+    fn from(value: ParameterInner<'a, T>) -> Self {
         let config = OptionConfig::from(&value);
         let ParameterInner { field, .. } = value;
         (config, Box::new(field))
     }
 }
 
-impl<'ap, T> From<&ParameterInner<'ap, T>> for OptionParameter {
-    fn from(value: &ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<&ParameterInner<'a, T>> for OptionParameter {
+    fn from(value: &ParameterInner<'a, T>) -> Self {
         OptionParameter::new(
             value.name.clone(),
             value.short.clone(),
@@ -114,22 +114,22 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for OptionParameter {
     }
 }
 
-impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentConfig {
-    fn from(value: &ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentConfig {
+    fn from(value: &ParameterInner<'a, T>) -> Self {
         ArgumentConfig::new(value.name.clone(), Bound::from(value.nargs))
     }
 }
 
-impl<'ap, T> From<ParameterInner<'ap, T>> for ArgumentCapture<'ap> {
-    fn from(value: ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<ParameterInner<'a, T>> for ArgumentCapture<'a> {
+    fn from(value: ParameterInner<'a, T>) -> Self {
         let config = ArgumentConfig::from(&value);
         let ParameterInner { field, .. } = value;
         (config, Box::new(field))
     }
 }
 
-impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentParameter {
-    fn from(value: &ParameterInner<'ap, T>) -> Self {
+impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentParameter {
+    fn from(value: &ParameterInner<'a, T>) -> Self {
         ArgumentParameter::new(
             value.name.clone(),
             value.nargs,
@@ -185,9 +185,9 @@ impl<'ap, T> From<&ParameterInner<'ap, T>> for ArgumentParameter {
 /// // Display does not invert FromStr!
 /// assert_ne!(FooBar::from_str("foo").unwrap().to_string(), "foo");
 /// ```
-pub struct Condition<'ap, T>(Parameter<'ap, T>);
+pub struct Condition<'a, T>(Parameter<'a, T>);
 
-impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
+impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
     /// Create a condition parameter.
     ///
     /// ### Example
@@ -229,7 +229,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     ///     FooBar::Bar => println!("Do bar'y things."),
     /// };
     /// ```
-    pub fn new(value: Scalar<'ap, T>, name: &'static str) -> Self {
+    pub fn new(value: Scalar<'a, T>, name: &'static str) -> Self {
         Condition(Parameter::argument(value, name))
     }
 
@@ -251,12 +251,12 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
         Self(inner.help(description))
     }
 
-    pub(super) fn consume(self) -> Parameter<'ap, T> {
+    pub(super) fn consume(self) -> Parameter<'a, T> {
         self.0
     }
 }
 
-impl<'ap, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'ap, T> {
+impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, T> {
     /// Document a choice in the help message for the sub-command condition.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the sub-command condition.
     /// Repeat using different variants to document multiple choices.
@@ -310,9 +310,9 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'ap
 
 /// An argument/option for the `CommandParser`.
 /// Used with `CommandParser::add` and `SubCommandParser::add`.
-pub struct Parameter<'ap, T>(ParameterInner<'ap, T>);
+pub struct Parameter<'a, T>(ParameterInner<'a, T>);
 
-impl<'ap, T> Parameter<'ap, T> {
+impl<'a, T> Parameter<'a, T> {
     /// Create an option parameter.
     ///
     /// ### Example
@@ -324,7 +324,7 @@ impl<'ap, T> Parameter<'ap, T> {
     /// Parameter::option(Switch::new(&mut verbose, true), "verbose", Some('v'));
     /// ```
     pub fn option(
-        field: impl GenericCapturable<'ap, T> + CliOption + 'ap,
+        field: impl GenericCapturable<'a, T> + CliOption + 'a,
         name: impl Into<String>,
         short: Option<char>,
     ) -> Self {
@@ -351,7 +351,7 @@ impl<'ap, T> Parameter<'ap, T> {
     /// Parameter::argument(Scalar::new(&mut verbose), "verbose");
     /// ```
     pub fn argument(
-        field: impl GenericCapturable<'ap, T> + CliArgument + 'ap,
+        field: impl GenericCapturable<'a, T> + CliArgument + 'a,
         name: impl Into<String>,
     ) -> Self {
         let nargs = field.nargs();
@@ -389,12 +389,12 @@ impl<'ap, T> Parameter<'ap, T> {
         self.0.name.clone()
     }
 
-    pub(super) fn consume(self) -> ParameterInner<'ap, T> {
+    pub(super) fn consume(self) -> ParameterInner<'a, T> {
         self.0
     }
 }
 
-impl<'ap, T: std::fmt::Display> Choices<T> for Parameter<'ap, T> {
+impl<'a, T: std::fmt::Display> Choices<T> for Parameter<'a, T> {
     /// Document a choice in the help message for this parameter.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the parameter.
     /// Repeat using different variants to document multiple choices.

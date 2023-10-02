@@ -97,7 +97,7 @@ impl From<DeriveSubParser> for TokenStream2 {
 
         quote! {
                 impl #struct_name {
-                    fn setup_command<'ap>(#struct_target: &'ap mut #struct_name) -> impl FnOnce(SubCommand<'ap>) -> SubCommand<'ap> {
+                    fn setup_command<'a>(#struct_target: &'a mut #struct_name) -> impl FnOnce(SubCommand<'a>) -> SubCommand<'a> {
                         #clp
                     }
                 }
@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
- fn setup_command < 'ap > (my_struct_target : & 'ap mut my_struct) -> impl FnOnce (SubCommand < 'ap >) -> SubCommand < 'ap > {
+ fn setup_command < 'a > (my_struct_target : & 'a mut my_struct) -> impl FnOnce (SubCommand < 'a >) -> SubCommand < 'a > {
  | clp | clp }
  }
 "#,
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
- fn setup_command < 'ap > (my_struct_target : & 'ap mut my_struct) -> impl FnOnce (SubCommand < 'ap >) -> SubCommand < 'ap > {
+ fn setup_command < 'a > (my_struct_target : & 'a mut my_struct) -> impl FnOnce (SubCommand < 'a >) -> SubCommand < 'a > {
  | mut clp | {
  clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  clp }

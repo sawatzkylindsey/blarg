@@ -12,7 +12,7 @@ pub trait CliArgument {}
 ///
 /// We use this at the bottom of the command line parser object graph so the compiler can maintain each field's type.
 #[doc(hidden)]
-pub trait GenericCapturable<'ap, T> {
+pub trait GenericCapturable<'a, T> {
     /// Declare that the parameter has been matched.
     fn matched(&mut self);
 

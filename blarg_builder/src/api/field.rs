@@ -9,23 +9,23 @@ use crate::model::Nargs;
 use crate::prelude::Collectable;
 
 /// An option parameter that takes a single value (`Nargs::Precisely(1)`).
-pub struct Scalar<'ap, T> {
-    variable: Rc<RefCell<&'ap mut T>>,
+pub struct Scalar<'a, T> {
+    variable: Rc<RefCell<&'a mut T>>,
 }
 
-impl<'ap, T> CliOption for Scalar<'ap, T> {}
-impl<'ap, T> CliArgument for Scalar<'ap, T> {}
+impl<'a, T> CliOption for Scalar<'a, T> {}
+impl<'a, T> CliArgument for Scalar<'a, T> {}
 
-impl<'ap, T> Scalar<'ap, T> {
+impl<'a, T> Scalar<'a, T> {
     /// Create a scalar parameter.
-    pub fn new(variable: &'ap mut T) -> Self {
+    pub fn new(variable: &'a mut T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
         }
     }
 }
 
-impl<'ap, T> GenericCapturable<'ap, T> for Scalar<'ap, T>
+impl<'a, T> GenericCapturable<'a, T> for Scalar<'a, T>
 where
     T: FromStr,
 {
@@ -50,16 +50,16 @@ where
 }
 
 /// An option parameter that takes no values (`Nargs::Precisely(0)`).
-pub struct Switch<'ap, T> {
-    variable: Rc<RefCell<&'ap mut T>>,
+pub struct Switch<'a, T> {
+    variable: Rc<RefCell<&'a mut T>>,
     target: Option<T>,
 }
 
-impl<'ap, T> CliOption for Switch<'ap, T> {}
+impl<'a, T> CliOption for Switch<'a, T> {}
 
-impl<'ap, T> Switch<'ap, T> {
+impl<'a, T> Switch<'a, T> {
     /// Create a switch parameter (option).
-    pub fn new(variable: &'ap mut T, target: T) -> Self {
+    pub fn new(variable: &'a mut T, target: T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
             target: Some(target),
@@ -67,7 +67,7 @@ impl<'ap, T> Switch<'ap, T> {
     }
 }
 
-impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T> {
+impl<'a, T> GenericCapturable<'a, T> for Switch<'a, T> {
     fn matched(&mut self) {
         **self.variable.borrow_mut() = self
             .target
@@ -85,22 +85,22 @@ impl<'ap, T> GenericCapturable<'ap, T> for Switch<'ap, T> {
 }
 
 /// An option parameter that maps down to `Option`, taking a single value (`Nargs::Precisely(1)`).
-pub struct Optional<'ap, T> {
-    variable: Rc<RefCell<&'ap mut Option<T>>>,
+pub struct Optional<'a, T> {
+    variable: Rc<RefCell<&'a mut Option<T>>>,
 }
 
-impl<'ap, T> CliOption for Optional<'ap, T> {}
+impl<'a, T> CliOption for Optional<'a, T> {}
 
-impl<'ap, T> Optional<'ap, T> {
+impl<'a, T> Optional<'a, T> {
     /// Create an optional parameter (option).
-    pub fn new(variable: &'ap mut Option<T>) -> Self {
+    pub fn new(variable: &'a mut Option<T>) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
         }
     }
 }
 
-impl<'ap, T> GenericCapturable<'ap, T> for Optional<'ap, T>
+impl<'a, T> GenericCapturable<'a, T> for Optional<'a, T>
 where
     T: FromStr,
 {
@@ -125,25 +125,25 @@ where
 }
 
 /// A parameter that takes multiple values (specifiable `Nargs`).
-pub struct Collection<'ap, C, T>
+pub struct Collection<'a, C, T>
 where
-    C: 'ap + Collectable<T>,
+    C: 'a + Collectable<T>,
 {
-    variable: Rc<RefCell<&'ap mut C>>,
+    variable: Rc<RefCell<&'a mut C>>,
     nargs: Nargs,
     _phantom: PhantomData<T>,
 }
 
-impl<'ap, C, T> CliOption for Collection<'ap, C, T> where C: 'ap + Collectable<T> {}
+impl<'a, C, T> CliOption for Collection<'a, C, T> where C: 'a + Collectable<T> {}
 
-impl<'ap, C, T> CliArgument for Collection<'ap, C, T> where C: 'ap + Collectable<T> {}
+impl<'a, C, T> CliArgument for Collection<'a, C, T> where C: 'a + Collectable<T> {}
 
-impl<'ap, C, T> Collection<'ap, C, T>
+impl<'a, C, T> Collection<'a, C, T>
 where
-    C: 'ap + Collectable<T>,
+    C: 'a + Collectable<T>,
 {
     /// Create a collection parameter.
-    pub fn new(variable: &'ap mut C, nargs: Nargs) -> Self {
+    pub fn new(variable: &'a mut C, nargs: Nargs) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
             nargs,
@@ -152,10 +152,10 @@ where
     }
 }
 
-impl<'ap, C, T> GenericCapturable<'ap, T> for Collection<'ap, C, T>
+impl<'a, C, T> GenericCapturable<'a, T> for Collection<'a, C, T>
 where
     T: FromStr,
-    C: 'ap + Collectable<T>,
+    C: 'a + Collectable<T>,
 {
     fn matched(&mut self) {
         // Do nothing.
