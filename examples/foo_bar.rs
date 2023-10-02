@@ -1,4 +1,7 @@
-use blarg::{Collection, CommandLineParser, Condition, Nargs, Optional, Parameter, Scalar, Switch};
+use blarg::{
+    prelude::*, Collection, CommandLineParser, Condition, Nargs, Optional, Parameter, Scalar,
+    Switch,
+};
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::str::FromStr;

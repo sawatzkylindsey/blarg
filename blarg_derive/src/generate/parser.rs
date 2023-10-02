@@ -25,7 +25,7 @@ impl From<DeriveParser> for TokenStream2 {
                         let field_name_target = format_ident!("{command_struct}_target");
 
                         quote! {
-                            let mut #field_name_target = #command_struct::#initializer();
+                            let mut #field_name_target = <#command_struct>::#initializer();
                         }
                     })
                     .collect();
@@ -58,7 +58,7 @@ impl From<DeriveParser> for TokenStream2 {
         quote! {
             impl #struct_name {
                 fn parse() -> #struct_name {
-                    let mut #struct_target = #struct_name::#initializer();
+                    let mut #struct_target = <#struct_name>::#initializer();
                     #sub_struct_targets
                     #clp
                     let parser = clp.build().expect("Invalid CommandLineParser configuration");
@@ -136,7 +136,7 @@ mod tests {
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
  fn parse () -> my_struct {
- let mut my_struct_target = my_struct :: default () ;
+ let mut my_struct_target = < my_struct > :: default () ;
  let clp = CommandLineParser :: new (env ! ("CARGO_CRATE_NAME")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
@@ -160,6 +160,7 @@ mod tests {
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                choices: None,
                 help: None,
             }],
         };
@@ -172,7 +173,7 @@ mod tests {
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
  fn parse () -> my_struct {
- let mut my_struct_target = my_struct :: default () ;
+ let mut my_struct_target = < my_struct > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
  clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
@@ -216,6 +217,7 @@ mod tests {
                         },
                     ],
                 },
+                choices: None,
                 help: None,
             }],
         };
@@ -228,9 +230,9 @@ mod tests {
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
  fn parse () -> my_struct {
- let mut my_struct_target = my_struct :: default () ;
- let mut Abc_target = Abc :: default () ;
- let mut Def_target = Def :: default () ;
+ let mut my_struct_target = < my_struct > :: default () ;
+ let mut Abc_target = < Abc > :: default () ;
+ let mut Def_target = < Def > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
  let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
@@ -273,6 +275,7 @@ mod tests {
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                choices: None,
                 help: None,
             }],
         };

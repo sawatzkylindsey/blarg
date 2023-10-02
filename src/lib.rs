@@ -267,4 +267,4 @@
 //! # Features
 //! * `unit_test`: For features that help with unit testing.
 pub use blarg_builder::*;
-pub use blarg_derive::*;
+pub use blarg_derive as derive;

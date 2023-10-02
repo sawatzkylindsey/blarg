@@ -1,13 +1,14 @@
 #[allow(unused_imports)]
-use blarg::{
-    BlargParser, BlargSubParser, CommandLineParser, Condition, Parameter, Scalar, SubCommand,
-};
+use blarg::{derive::*, prelude::*, CommandLineParser, Condition, Parameter, Scalar, SubCommand};
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, BlargChoices)]
 enum FooBar {
+    #[blarg(hidden, help = "foo ...")]
     Foo,
+    #[blarg(help = "bar ...")]
     Bar,
+    Baz,
 }
 
 impl std::fmt::Display for FooBar {
@@ -15,6 +16,7 @@ impl std::fmt::Display for FooBar {
         match self {
             FooBar::Foo => write!(f, "foo"),
             FooBar::Bar => write!(f, "bar"),
+            FooBar::Baz => write!(f, "baz"),
         }
     }
 }
@@ -26,6 +28,7 @@ impl FromStr for FooBar {
         match value.to_lowercase().as_str() {
             "foo" => Ok(FooBar::Foo),
             "bar" => Ok(FooBar::Bar),
+            "baz" => Ok(FooBar::Baz),
             _ => Err(format!("unknown: {}", value)),
         }
     }
@@ -37,7 +40,8 @@ struct Parameters {
     #[blarg(
         command = (FooBar::Foo, SubFoo),
         command = (FooBar::Bar, SubBar),
-        help = "make a good selection ok"
+        help = "make a good selection ok",
+        choices,
     )]
     switch: FooBar,
 }
@@ -64,6 +68,7 @@ impl SubFoo {
 
 #[derive(Debug, Default, BlargSubParser)]
 struct SubBar {
+    #[blarg(help = "my special value")]
     value: String,
 }
 

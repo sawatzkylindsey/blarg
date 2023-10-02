@@ -1,4 +1,4 @@
-use blarg::{BlargParser, CommandLineParser, Optional, Parameter, Scalar};
+use blarg::{derive::*, CommandLineParser, Optional, Parameter, Scalar};
 
 #[test]
 fn builder_compiles() {

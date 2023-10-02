@@ -1,6 +1,9 @@
-use crate::model::{
-    DeriveParameter, DeriveParser, DeriveSubParser, DeriveValue, IntermediateAttributes,
-    ParameterType,
+use crate::{
+    model::{
+        DeriveParameter, DeriveParser, DeriveSubParser, DeriveValue, IntermediateAttributes,
+        ParameterType,
+    },
+    {MACRO_BLARG_PARSER, MACRO_BLARG_SUB_PARSER},
 };
 use quote::quote;
 
@@ -9,7 +12,6 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
 
     fn try_from(value: syn::DeriveInput) -> Result<Self, Self::Error> {
         let mut attributes = IntermediateAttributes::default();
-
         for attribute in &value.attrs {
             if attribute.path().is_ident("blarg") {
                 attributes = IntermediateAttributes::from(attribute);
@@ -63,7 +65,7 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                     return Err(syn::Error::new(
                         value.ident.span(),
                         format!(
-                            "Invalid - parser cannot have multiple conditions: {:?}.",
+                            "Invalid - {MACRO_BLARG_PARSER} cannot have multiple conditions: {:?}.",
                             conditions.iter().map(|i| i.to_string()).collect::<Vec<_>>(),
                         ),
                     ));
@@ -82,9 +84,10 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                 // println!("{cli_parser:?}");
                 Ok(cli_parser)
             }
-            _ => {
-                todo!()
-            }
+            _ => Err(syn::Error::new(
+                parser_name.span(),
+                format!("Invalid - {MACRO_BLARG_PARSER} only applies to 'struct' data structures."),
+            )),
         }
     }
 }
@@ -120,7 +123,7 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
                     return Err(syn::Error::new(
                         value.ident.span(),
                         format!(
-                            "Invalid - sub-parser cannot have any conditions: {:?}.",
+                            "Invalid - {MACRO_BLARG_SUB_PARSER} cannot have any conditions: {:?}.",
                             conditions.iter().map(|i| i.to_string()).collect::<Vec<_>>(),
                         ),
                     ));
@@ -133,9 +136,12 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
                 // println!("{cli_sub_parser:?}");
                 Ok(cli_sub_parser)
             }
-            _ => {
-                todo!()
-            }
+            _ => Err(syn::Error::new(
+                parser_name.span(),
+                format!(
+                    "Invalid - {MACRO_BLARG_SUB_PARSER} only applies to 'struct' data structures."
+                ),
+            )),
         }
     }
 }
@@ -208,6 +214,7 @@ mod tests {
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    choices: None,
                     help: None,
                 }],
             }
@@ -245,6 +252,7 @@ mod tests {
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    choices: None,
                     help: None,
                 }],
             }
@@ -273,7 +281,28 @@ mod tests {
         // Verify
         assert_eq!(
             error.to_string(),
-            "Invalid - parser cannot have multiple conditions: [\"apple\", \"banana\"]."
+            "Invalid - BlargParser cannot have multiple conditions: [\"apple\", \"banana\"]."
+        );
+    }
+
+    #[test]
+    fn construct_derive_parser_invalid() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(BlargParser)]
+                enum Values { }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let error = DeriveParser::try_from(input).unwrap_err();
+
+        // Verify
+        assert_eq!(
+            error.to_string(),
+            "Invalid - BlargParser only applies to 'struct' data structures."
         );
     }
 
@@ -325,6 +354,7 @@ mod tests {
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     parameter_type: ParameterType::ScalarArgument,
+                    choices: None,
                     help: None,
                 }],
             }
@@ -352,7 +382,28 @@ mod tests {
         // Verify
         assert_eq!(
             error.to_string(),
-            "Invalid - sub-parser cannot have any conditions: [\"apple\"]."
+            "Invalid - BlargSubParser cannot have any conditions: [\"apple\"]."
+        );
+    }
+
+    #[test]
+    fn construct_derive_sub_parser_invalid() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(BlargSubParser)]
+                enum Values { }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let error = DeriveSubParser::try_from(input).unwrap_err();
+
+        // Verify
+        assert_eq!(
+            error.to_string(),
+            "Invalid - BlargSubParser only applies to 'struct' data structures."
         );
     }
 

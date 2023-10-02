@@ -4,11 +4,13 @@ mod generate;
 mod load;
 mod model;
 
-use crate::model::{DeriveParser, DeriveSubParser};
+use crate::model::{DeriveChoices, DeriveParser, DeriveSubParser};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn;
+
+pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 
 #[proc_macro_derive(BlargParser, attributes(blarg))]
 pub fn parser(input: TokenStream) -> TokenStream {
@@ -27,7 +29,9 @@ pub fn parser(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(BlargSubParser)]
+pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
+
+#[proc_macro_derive(BlargSubParser, attributes(blarg))]
 pub fn sub_parser(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html
     let derive_input: syn::DeriveInput = syn::parse(input).unwrap();
@@ -41,6 +45,25 @@ pub fn sub_parser(input: TokenStream) -> TokenStream {
             .into()
         }
         Ok(derive_sub_parser) => TokenStream2::from(derive_sub_parser).into(),
+    }
+}
+
+pub(crate) const MACRO_BLARG_CHOICES: &str = "BlargChoices";
+
+#[proc_macro_derive(BlargChoices, attributes(blarg))]
+pub fn choices(input: TokenStream) -> TokenStream {
+    // https://doc.rust-lang.org/book/ch19-06-macros.html
+    let derive_input: syn::DeriveInput = syn::parse(input).unwrap();
+
+    match DeriveChoices::try_from(derive_input) {
+        Err(error) => {
+            let compile_error = error.to_compile_error();
+            quote! {
+                #compile_error
+            }
+            .into()
+        }
+        Ok(derive_choices) => TokenStream2::from(derive_choices).into(),
     }
 }
 

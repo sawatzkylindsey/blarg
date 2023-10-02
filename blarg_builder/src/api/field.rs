@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use crate::api::capture::*;
 use crate::model::Nargs;
+use crate::prelude::Collectable;
 
 /// An option parameter that takes a single value (`Nargs::Precisely(1)`).
 pub struct Scalar<'ap, T> {

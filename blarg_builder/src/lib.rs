@@ -6,6 +6,8 @@ mod constant;
 mod matcher;
 mod model;
 mod parser;
+#[allow(missing_docs)]
+pub mod prelude;
 
 pub use api::*;
 pub use model::*;

@@ -63,6 +63,7 @@ pub enum ParameterType {
 pub struct DeriveParameter {
     pub field_name: syn::Ident,
     pub parameter_type: ParameterType,
+    pub choices: Option<DeriveValue>,
     pub help: Option<DeriveValue>,
 }
 
@@ -78,4 +79,17 @@ pub struct DeriveParser {
 pub struct DeriveSubParser {
     pub struct_name: syn::Ident,
     pub parameters: Vec<DeriveParameter>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeriveChoices {
+    pub struct_name: syn::Ident,
+    pub variants: Vec<DeriveVariant>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeriveVariant {
+    pub field_name: syn::Ident,
+    pub hidden: bool,
+    pub help: Option<DeriveValue>,
 }

@@ -5,6 +5,7 @@ use crate::parser::{
     AnonymousCapturable, ArgumentCapture, ArgumentParameter, OptionCapture, OptionParameter,
     ParseError,
 };
+use crate::prelude::Choices;
 use std::collections::HashMap;
 
 pub(crate) struct AnonymousCapture<'ap, T: 'ap> {
@@ -232,6 +233,30 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
         Condition(Parameter::argument(value, name))
     }
 
+    /// Document the help message for this sub-command condition.
+    /// If repeated, only the final message will apply to the sub-command condition.
+    ///
+    /// ### Example
+    /// ```
+    /// # use blarg_builder as blarg;
+    /// use blarg::{Condition, Scalar};
+    ///
+    /// let mut case: u32 = 0;
+    /// Condition::new(Scalar::new(&mut case), "case")
+    ///     .help("--this will get discarded--")
+    ///     .help("Choose the 'case' to execute.");
+    /// ```
+    pub fn help(self, description: impl Into<String>) -> Self {
+        let inner = self.0;
+        Self(inner.help(description))
+    }
+
+    pub(super) fn consume(self) -> Parameter<'ap, T> {
+        self.0
+    }
+}
+
+impl<'ap, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'ap, T> {
     /// Document a choice in the help message for the sub-command condition.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the sub-command condition.
     /// Repeat using different variants to document multiple choices.
@@ -243,7 +268,7 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     /// ### Example
     /// ```
     /// # use blarg_builder as blarg;
-    /// use blarg::{Condition, Scalar};
+    /// use blarg::{prelude::*, Condition, Scalar};
     /// use std::str::FromStr;
     ///
     /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr`.
@@ -277,31 +302,9 @@ impl<'ap, T: std::str::FromStr + std::fmt::Display> Condition<'ap, T> {
     ///     .choice(FooBar::Foo, "Do foo'y things.")
     ///     .choice(FooBar::Bar, "Do bar'y things.");
     /// ```
-    pub fn choice(self, variant: T, description: impl Into<String>) -> Self {
+    fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let inner = self.0;
         Self(inner.choice(variant, description))
-    }
-
-    /// Document the help message for this sub-command condition.
-    /// If repeated, only the final message will apply to the sub-command condition.
-    ///
-    /// ### Example
-    /// ```
-    /// # use blarg_builder as blarg;
-    /// use blarg::{Condition, Scalar};
-    ///
-    /// let mut case: u32 = 0;
-    /// Condition::new(Scalar::new(&mut case), "case")
-    ///     .help("--this will get discarded--")
-    ///     .help("Choose the 'case' to execute.");
-    /// ```
-    pub fn help(self, description: impl Into<String>) -> Self {
-        let inner = self.0;
-        Self(inner.help(description))
-    }
-
-    pub(super) fn consume(self) -> Parameter<'ap, T> {
-        self.0
     }
 }
 
@@ -391,7 +394,7 @@ impl<'ap, T> Parameter<'ap, T> {
     }
 }
 
-impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
+impl<'ap, T: std::fmt::Display> Choices<T> for Parameter<'ap, T> {
     /// Document a choice in the help message for this parameter.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the parameter.
     /// Repeat using different variants to document multiple choices.
@@ -403,7 +406,7 @@ impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
     /// ### Example
     /// ```
     /// # use blarg_builder as blarg;
-    /// use blarg::{Parameter, Scalar};
+    /// use blarg::{prelude::*, Parameter, Scalar};
     /// use std::str::FromStr;
     ///
     /// let mut door: u32 = 0;
@@ -412,7 +415,7 @@ impl<'ap, T: std::fmt::Display> Parameter<'ap, T> {
     ///     .choice(1, "Enter door #1.")
     ///     .choice(2, "Enter door #2.");
     /// ```
-    pub fn choice(self, variant: T, description: impl Into<String>) -> Self {
+    fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let mut inner = self.0;
         inner
             .choices

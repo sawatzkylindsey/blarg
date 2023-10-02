@@ -44,6 +44,27 @@ impl TryFrom<&syn::Field> for DeriveParameter {
                 },
             ),
         };
+        let choices = match attributes.pairs.get("choices") {
+            Some(values) => {
+                let tokens = &values
+                    .first()
+                    .expect("attribute pair 'choices' must contain non-empty values")
+                    .tokens;
+                Some(DeriveValue {
+                    tokens: quote! { #tokens },
+                })
+            }
+            None => {
+                if attributes.singletons.contains("choices") {
+                    let ty = &value.ty;
+                    Some(DeriveValue {
+                        tokens: quote! { <#ty>::blarg_choices },
+                    })
+                } else {
+                    None
+                }
+            }
+        };
         let help = match attributes.pairs.get("help") {
             Some(values) => {
                 let tokens = values
@@ -158,8 +179,9 @@ impl TryFrom<&syn::Field> for DeriveParameter {
         };
 
         Ok(DeriveParameter {
-            field_name: value.ident.clone().unwrap(),
+            field_name,
             parameter_type,
+            choices,
             help,
         })
     }
@@ -315,6 +337,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                choices: None,
                 help: None,
             }
         );
@@ -357,6 +380,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::OptionalOption { short: None },
+                choices: None,
                 help: None,
             }
         );
@@ -406,6 +430,7 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     }),
                 },
+                choices: None,
                 help: None,
             }
         );
@@ -443,6 +468,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::Switch { short: None },
+                choices: None,
                 help: None,
             }
         );
@@ -489,6 +515,93 @@ mod tests {
                         tokens: quote! { Nargs::AtLeastOne }
                     }
                 },
+                choices: None,
+                help: None,
+            }
+        );
+    }
+
+    #[test]
+    fn construct_with_choices() {
+        // Setup
+        let mut segments = syn::punctuated::Punctuated::new();
+        segments.push_value(PathSegment {
+            ident: ident("usize"),
+            arguments: PathArguments::None,
+        });
+        let attribute: syn::Attribute = parse_quote! {
+            #[blarg(choices)]
+        };
+        let input: syn::Field = syn::Field {
+            attrs: vec![attribute],
+            vis: syn::Visibility::Inherited,
+            mutability: syn::FieldMutability::None,
+            ident: Some(ident("my_field")),
+            colon_token: None,
+            ty: syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::Path {
+                    leading_colon: None,
+                    segments,
+                },
+            }),
+        };
+
+        // Execute
+        let derive_parameter = DeriveParameter::try_from(&input).unwrap();
+
+        // Verify
+        assert_eq!(
+            derive_parameter,
+            DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::ScalarArgument,
+                choices: Some(DeriveValue {
+                    tokens: quote! { <usize>::blarg_choices },
+                }),
+                help: None,
+            }
+        );
+    }
+
+    #[test]
+    fn construct_with_choices_function() {
+        // Setup
+        let mut segments = syn::punctuated::Punctuated::new();
+        segments.push_value(PathSegment {
+            ident: ident("usize"),
+            arguments: PathArguments::None,
+        });
+        let attribute: syn::Attribute = parse_quote! {
+            #[blarg(choices = my_func)]
+        };
+        let input: syn::Field = syn::Field {
+            attrs: vec![attribute],
+            vis: syn::Visibility::Inherited,
+            mutability: syn::FieldMutability::None,
+            ident: Some(ident("my_field")),
+            colon_token: None,
+            ty: syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::Path {
+                    leading_colon: None,
+                    segments,
+                },
+            }),
+        };
+
+        // Execute
+        let derive_parameter = DeriveParameter::try_from(&input).unwrap();
+
+        // Verify
+        assert_eq!(
+            derive_parameter,
+            DeriveParameter {
+                field_name: ident("my_field"),
+                parameter_type: ParameterType::ScalarArgument,
+                choices: Some(DeriveValue {
+                    tokens: quote! { my_func },
+                }),
                 help: None,
             }
         );
@@ -529,6 +642,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                choices: None,
                 help: Some(DeriveValue {
                     tokens: Literal::string("abc 123").to_token_stream(),
                 }),
@@ -573,6 +687,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarOption { short: None },
+                choices: None,
                 help: None,
             }
         );
@@ -617,6 +732,7 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     })
                 },
+                choices: None,
                 help: None,
             }
         );
@@ -676,6 +792,7 @@ mod tests {
                         }
                     ]
                 },
+                choices: None,
                 help: None,
             }
         );
@@ -737,6 +854,7 @@ mod tests {
                         }
                     ]
                 },
+                choices: None,
                 help: None,
             }
         );
@@ -787,6 +905,7 @@ mod tests {
                     },
                     short: None,
                 },
+                choices: None,
                 help: None,
             }
         );
@@ -839,6 +958,7 @@ mod tests {
                         tokens: Literal::character('m').into_token_stream(),
                     }),
                 },
+                choices: None,
                 help: None,
             },
         );
@@ -879,6 +999,7 @@ mod tests {
             DeriveParameter {
                 field_name: ident("my_field"),
                 parameter_type: ParameterType::ScalarArgument,
+                choices: None,
                 help: None,
             },
         );

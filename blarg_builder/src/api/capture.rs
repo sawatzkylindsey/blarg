@@ -2,12 +2,6 @@ use thiserror::Error;
 
 use crate::model::Nargs;
 
-/// Behaviour for multiple (0 to many) items T to be collected together.
-pub trait Collectable<T> {
-    /// Add a value to this `Collectable`.
-    fn add(&mut self, item: T);
-}
-
 /// Marker trait for capturable types that can formulate an option in the Cli
 pub trait CliOption {}
 

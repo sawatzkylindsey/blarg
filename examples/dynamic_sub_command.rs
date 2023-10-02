@@ -1,4 +1,4 @@
-use blarg::{CommandLineParser, Condition, Parameter, Scalar};
+use blarg::{prelude::*, CommandLineParser, Condition, Parameter, Scalar};
 use std::env;
 
 fn main() {

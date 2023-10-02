@@ -1,4 +1,5 @@
 mod attribute;
+mod choices;
 mod parameter;
 mod parser;
 

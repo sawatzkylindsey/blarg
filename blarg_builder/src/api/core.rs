@@ -314,6 +314,7 @@ mod tests {
     use crate::api::{Collection, Parameter, Scalar, Switch};
     use crate::model::Nargs;
     use crate::parser::util::channel_interface;
+    use crate::prelude::Choices;
     use crate::test::assert_contains;
     use rstest::rstest;
 

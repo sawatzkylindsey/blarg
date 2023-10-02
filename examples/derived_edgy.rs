@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use blarg::{
-    BlargParser, Collectable, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
+    derive::*, prelude::*, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
     Switch,
 };
 
@@ -9,6 +9,7 @@ use blarg::{
 struct Parameters {
     #[blarg(option)]
     items: Vec<usize>,
+    #[blarg(choices = elective_choices)]
     elective: Option<usize>,
     discretionary: Option<usize>,
 }
@@ -21,6 +22,14 @@ impl Parameters {
             discretionary: None,
         }
     }
+}
+
+fn elective_choices<T: Choices<usize>>(value: T) -> T {
+    value
+        .choice(0, "0th")
+        .choice(1, "1st")
+        .choice(2, "2nd")
+        .choice(3, "3rd")
 }
 
 fn main() {

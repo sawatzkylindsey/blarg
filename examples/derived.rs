@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use blarg::{
-    BlargParser, Collectable, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
+    derive::*, prelude::*, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
     Switch,
 };
 
