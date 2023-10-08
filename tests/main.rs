@@ -14,5 +14,5 @@ struct Boo {
 #[test]
 #[ignore]
 fn derive_compiles() {
-    Boo::parse();
+    Boo::blarg_parse();
 }

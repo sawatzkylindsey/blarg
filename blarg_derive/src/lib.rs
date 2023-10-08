@@ -12,6 +12,30 @@ use syn;
 
 pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 
+/// The primary derive macro which turns a struct into a `CommandLineParser`.
+///
+/// Supports the following struct attributes:
+/// * `#[blarg(program = "..")]` explicitly sets the name of your Cli program.
+/// When unspecified, defaults to the name of the cargo crate.
+/// * `#[blarg(initializer = F)]` instructs `blarg` to use the initializer method `F`.
+/// This allows for a separation between the `Default` method vs. *initial* values of the struct, which follows from `blargs`'s stance on [default & initials](../index.html#defaults--initials).
+/// When unspecified, defaults to the initializer method `default`.
+///
+/// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
+///
+/// ### Example
+/// ```ignore
+/// #[derive(BlargParser)]
+/// #[blarg(program = "my-program", initializer = init)]
+/// struct MyCli {
+/// }
+///
+/// impl MyCli {
+///     fn init() -> Self {
+///         todo!()
+///     }
+/// }
+/// ```
 #[proc_macro_derive(BlargParser, attributes(blarg))]
 pub fn parser(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html
@@ -31,6 +55,26 @@ pub fn parser(input: TokenStream) -> TokenStream {
 
 pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
 
+/// The derive macro which turns a struct into a `SubCommandParser`.
+///
+/// Supports no struct attributes.
+/// However take note: the *initializer* method is inherited from that of the [`BlargParser`].
+///
+/// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
+///
+/// ### Example
+/// ```ignore
+/// #[derive(BlargSubParser)]
+/// struct MySubCli {
+/// }
+///
+/// // Assuming the `BlargParser` struct uses `#[blarg(initializer = init)]`, then we must also implement `init` on the sub-command struct.
+/// impl MySubCli {
+///     fn init() -> Self {
+///         todo!()
+///     }
+/// }
+/// ```
 #[proc_macro_derive(BlargSubParser, attributes(blarg))]
 pub fn sub_parser(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html
@@ -50,6 +94,20 @@ pub fn sub_parser(input: TokenStream) -> TokenStream {
 
 pub(crate) const MACRO_BLARG_CHOICES: &str = "BlargChoices";
 
+/// Derive macro specific to generate a choices [help message](../derive/index.html#help-messages).
+///
+/// Supports the no enum attributes.
+///
+/// Refer to [blarg::derive](../derive/index.html#choices) to configure the variants of this enum.
+///
+/// ### Example
+/// ```ignore
+/// #[derive(BlargChoices)]
+/// enum MyEnum {
+///     A,
+///     B,
+/// }
+/// ```
 #[proc_macro_derive(BlargChoices, attributes(blarg))]
 pub fn choices(input: TokenStream) -> TokenStream {
     // https://doc.rust-lang.org/book/ch19-06-macros.html

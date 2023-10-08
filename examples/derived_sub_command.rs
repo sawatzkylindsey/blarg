@@ -79,6 +79,6 @@ impl SubBar {
 }
 
 fn main() {
-    let parameters = Parameters::parse();
+    let parameters = Parameters::blarg_parse();
     println!("{parameters:?}");
 }

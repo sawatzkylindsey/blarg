@@ -5,8 +5,8 @@ pub struct Params {
     items: Vec<u32>,
 }
 
-impl Default for Params {
-    fn default() -> Self {
+impl Params {
+    fn init() -> Self {
         Self {
             verbose: false,
             items: Vec::default(),
@@ -15,7 +15,7 @@ impl Default for Params {
 }
 
 fn main() {
-    let mut params = Params::default();
+    let mut params = Params::init();
 
     let clp = CommandLineParser::new("organization");
     let parser = clp

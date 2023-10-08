@@ -6,9 +6,9 @@ use blarg::{
 
 #[derive(Debug, Default, BlargParser)]
 struct Parameters {
-    #[blarg(argument, help = "just apple things")]
+    #[blarg(help = "just apple things")]
     apple: usize,
-    // #[blarg(option)]
+    #[blarg(help = "activate 'banana split' mode")]
     banana_split: bool,
     #[blarg(option, short = 'c')]
     cucumber: Option<usize>,
@@ -41,6 +41,6 @@ impl<T> Collectable<T> for Pair<T> {
 }
 
 fn main() {
-    let parameters = Parameters::parse();
+    let parameters = Parameters::blarg_parse();
     println!("{parameters:?}");
 }

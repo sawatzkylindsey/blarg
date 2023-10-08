@@ -57,7 +57,7 @@ impl From<DeriveParser> for TokenStream2 {
 
         quote! {
             impl #struct_name {
-                fn parse() -> #struct_name {
+                fn blarg_parse() -> #struct_name {
                     let mut #struct_target = <#struct_name>::#initializer();
                     #sub_struct_targets
                     #clp
@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
- fn parse () -> my_struct {
+ fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let clp = CommandLineParser :: new (env ! ("CARGO_CRATE_NAME")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
- fn parse () -> my_struct {
+ fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
  clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
@@ -229,7 +229,7 @@ mod tests {
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"impl my_struct {
- fn parse () -> my_struct {
+ fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let mut Abc_target = < Abc > :: default () ;
  let mut Def_target = < Def > :: default () ;

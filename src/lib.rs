@@ -2,7 +2,7 @@
 //!
 //! Although other crates provide command line parser functionality, we have found they prioritize different concerns than those we are interested in.
 //! It is very possible those crates can be configured to make *our desired* command line parser.
-//! We built `blarg` to create *our desired* style of command line parser "out of the box".
+//! We built `blarg` to create our desired style of command line parser "out of the box".
 //! Specifically, `blarg` attempts to prioritize the following design concerns:
 //! * *Type safe argument parsing*:
 //! The user should not call any `&str -> T` conversion functions directly.
@@ -10,7 +10,7 @@
 //! The user should not validate/reject any domain invalid inputs (see footnotes #1 for examples).
 //! Instead, the command line parser should be configurable to prevent these.
 //! * *Argument vs. option paradigm*:
-//! The basic Api design for constructing an command line parser is via *arguments* and *options*.
+//! The basic Api design for constructing a command line parser is via *arguments* and *options*.
 //! Briefly, arguments are required parameters specified positionally on the Cli.
 //! Options are optional parameters specified via `--..` or `-..` syntax.
 //! * *Sub-command paradigm*:
@@ -26,25 +26,31 @@
 //! ### Future
 //! As it currently stands, we feel `blarg` fits a niche role in the rust ecosystem.
 //! Additionally, we have other plans you may be interested in:
-//! * Derive macro support.
-//! * Automatic choice documentation.
-//! * Default/initial value documentation.
+//! * ~Derive macro support.~
+//! * ~Automatic choice documentation.~
+//! * ~Default/initial value documentation.~
 //! * Help message formatting, such as line wrapping.
 //! * Fallible `Collectable`s.
 //!
 //! # Usage
-//! This documentation includes a few demos on using `blarg.`
+//! This page includes a few demos on using `blarg.`
 //! More examples are outlined in [the source](https://github.com/sawatzkylindsey/blarg/tree/main/examples).
 //!
+//! via [derive Api](./derive/index.html):
 //! ```no_run
-#![doc = include_str!("../examples/demo_summer.rs")]
+#![doc = include_str!("../examples/demo_summer_d.rs")]
+//! ```
+//! or equivalently via builder Api:
+//! ```no_run
+#![doc = include_str!("../examples/demo_summer_b.rs")]
 //! ```
 //!
+//! Both of these generate the same Cli program:
 //! ```console
 //! $ summer -h
 //! usage: summer [-h] ITEM [...]
 //! positional arguments:
-//!  ITEM        The items to sum.
+//!  ITEM [...]  The items to sum.
 //! options:
 //!  -h, --help  Show this help message and exit.
 //!
@@ -62,7 +68,11 @@
 //!   ^
 //! ```
 //!
-//! # Api Configuration
+//! # Derive Api
+//! We highly recommend using the [derive Api](./derive/index.html) to configure your Cli program.
+//! The next section explains the structure and semantics of `blarg` using the builder Api, which applies to both builder and derive Apis.
+//!
+//! # Builder Api
 //! Configure `blarg` by starting with a [`CommandLineParser`] and `add`ing parameters.
 //! There are two classes of parameters: [`Parameter::argument`] and [`Parameter::option`].
 //!
@@ -82,7 +92,7 @@
 //! * [`Scalar`]: defines a single-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
 //! This is the most common field to use in your Cli.
 //! * [`Collection`]: defines a multi-value `Parameter` (applies to both `Parameter::argument` & `Parameter::option`).
-//! This field allows you to configure the cardinality (aka: `Nargs`) for any collection that implements [`Collectable`].
+//! This field allows you to configure the cardinality (aka: `Nargs`) for any collection that implements [Collectable](./prelude/trait.Collectable.html).
 //! `blarg` provides this `Collectable` implementations for `Vec<T>` and `HashSet<T>`.
 //! * [`Switch`]: defines a no-value `Parameter::option` (not applicable to `Parameter::argument`).
 //! This is used when specifying Cli *flags* (ex: `--verbose`).
@@ -96,7 +106,7 @@
 //! The sub-command section of the parser begins by `branch`ing this parser.
 //!
 //! Branching takes a special [`Condition`] parameter which only allows a `Scalar` field.
-//! You may describe the sub-commands on the condition via [`Condition::choice`] (the same mechanism as [`Parameter::choice`]).
+//! You may describe the sub-commands on the condition via [Condition::choice](./struct.Condition.html#method.choice) (the same mechanism as [Parameter::choice](./struct.Parameter.html#method.choice)).
 //! In `blarg`, any type `T` can be used to define sub-commands; sub-commands needn't only be strings.
 //! See the condition section below for further explanation.
 //!
@@ -164,8 +174,8 @@
 //! ### Defaults & Initials
 //! Technically, `blarg` has nothing to do with specifying default values for parameters.
 //! This may be confusing - defaults are a common feature for command line parsers!
-//! However, the defaults of your Cli will come from the variable initializations when configuring `blarg`.
-//! We plan to support presenting defaults over the help message, but behaviourally `blarg` will not take part in *setting* parameter defaults.
+//! Instead, the defaults of your Cli will come from the variable initializations when configuring `blarg`.
+//! We support presenting defaults over the help message via derive Api, but behaviourally `blarg` does not take part in *setting* parameter defaults.
 //!
 //! ```
 //! // The default for the 'verbose' parameter is 'false'.
@@ -197,13 +207,14 @@
 //!
 //! ### Organization
 //! It may be useful to organize your program variables into a single struct.
-//! We plan to support a derive Api that will automatically build out the `CommandLineParser` from such a struct in the future.
+//! Configuring such an organizational struct is made seamless with the [derive Api](./derive/index.html).
+//! The following demonstrates how to *manually* configure an organizational struct with `blarg`.
 //!
 //! ```no_run
 #![doc = include_str!("../examples/demo_organization.rs")]
 //! ```
 //!
-//! # Cli Syntax
+//! # Cli Semantics
 //! `blarg` parses the Cli tokens according to the following set of rules.
 //! By and large this syntax should be familiar to many Cli developers, with a few subtle nuances for various edge cases.
 //!
@@ -266,5 +277,5 @@
 //!
 //! # Features
 //! * `unit_test`: For features that help with unit testing.
+pub mod derive;
 pub use blarg_builder::*;
-pub use blarg_derive as derive;

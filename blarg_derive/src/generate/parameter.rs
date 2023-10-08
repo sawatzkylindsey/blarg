@@ -32,6 +32,7 @@ impl DeriveParameter {
             ),
 
             ParameterType::CollectionOption { nargs, short } => {
+                let field_name_str = field_name_str.replace("_", "-");
                 let nargs = &nargs.tokens;
                 let short = flatten(short.as_ref());
                 (
@@ -43,6 +44,7 @@ impl DeriveParameter {
                 )
             }
             ParameterType::ScalarOption { short } => {
+                let field_name_str = field_name_str.replace("_", "-");
                 let short = flatten(short.as_ref());
                 (
                     None,
@@ -54,6 +56,7 @@ impl DeriveParameter {
                 )
             }
             ParameterType::OptionalOption { short } => {
+                let field_name_str = field_name_str.replace("_", "-");
                 let short = flatten(short.as_ref());
                 (
                     None,
@@ -65,6 +68,7 @@ impl DeriveParameter {
             }
 
             ParameterType::Switch { short } => {
+                let field_name_str = field_name_str.replace("_", "-");
                 let short = flatten(short.as_ref());
                 let field_name_target = format_ident!("{field_name}_target");
 
@@ -533,7 +537,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
 "#
@@ -566,7 +570,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default)))) ;
 "#
@@ -601,7 +605,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
@@ -636,7 +640,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
@@ -671,7 +675,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m')) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
 "#
@@ -698,12 +702,12 @@ mod tests {
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None)) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None)) ;
  }
 "#
         );
@@ -731,12 +735,12 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default)))) ;
  }
  else {
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None))) ;
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None))) ;
  }
 "#
         );
@@ -765,14 +769,14 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
 )" , "abc 123" , my_field_default)))) ;
  }
  else {
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help ("abc 123"))) ;
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123"))) ;
  }
 "#
         );
@@ -800,14 +804,14 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
 )" , "abc 123" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , None) . help ("abc 123")) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123")) ;
  }
 "#
         );
@@ -837,12 +841,12 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my_field" , Some ('m'))) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m'))) ;
  }
 "#
         );
@@ -865,7 +869,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
 "#
@@ -891,7 +895,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
 }
 )" , my_field_default)))) ;
 "#
@@ -919,7 +923,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
@@ -947,7 +951,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my_field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
  (default {
 }
@@ -977,7 +981,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my_field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(default {
 }
 )" , my_field_default))) ;
 "#
@@ -1000,7 +1004,7 @@ inner}
         // Verify
         assert_eq!(
             token_stream.to_string(),
-            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my_field\" , None)) ;"
+            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my-field\" , None)) ;"
         );
     }
 
@@ -1023,7 +1027,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_target = target . my_field . clone () ;
- clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my_field" , None))) ;
+ clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None))) ;
 "#
         );
     }
@@ -1049,7 +1053,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_target = target . my_field . clone () ;
- clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my_field" , None) . help ("abc 123"))) ;
+ clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None) . help ("abc 123"))) ;
 "#
         );
     }
@@ -1073,7 +1077,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_target = target . my_field . clone () ;
- clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my_field" , None) . help ("abc 123")) ;
+ clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None) . help ("abc 123")) ;
 "#
         );
     }
@@ -1098,7 +1102,7 @@ inner}
         // Verify
         assert_eq!(
             token_stream.to_string(),
-            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my_field\" , Some ('m'))) ;"
+            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my-field\" , Some ('m'))) ;"
         );
     }
 

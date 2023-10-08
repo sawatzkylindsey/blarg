@@ -24,7 +24,7 @@ impl Parameters {
     }
 }
 
-fn elective_choices<T: Choices<usize>>(value: T) -> T {
+fn elective_choices(value: Parameter<usize>) -> Parameter<usize> {
     value
         .choice(0, "0th")
         .choice(1, "1st")
@@ -33,6 +33,6 @@ fn elective_choices<T: Choices<usize>>(value: T) -> T {
 }
 
 fn main() {
-    let parameters = Parameters::parse();
+    let parameters = Parameters::blarg_parse();
     println!("{parameters:?}");
 }
