@@ -159,6 +159,7 @@ mod tests {
             },
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: None,
                 help: None,
@@ -175,7 +176,9 @@ mod tests {
  fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+}
+)" , "usize"))) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
  my_struct_target }
@@ -197,6 +200,7 @@ mod tests {
             },
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::Condition {
                     commands: vec![
                         Command {
@@ -234,7 +238,9 @@ mod tests {
  let mut Abc_target = < Abc > :: default () ;
  let mut Def_target = < Def > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
+ let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+}
+)" , "usize"))) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
@@ -274,6 +280,7 @@ mod tests {
             struct_name: ident("my_struct"),
             parameters: vec![DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: None,
                 help: None,
@@ -289,7 +296,9 @@ mod tests {
             r#"impl my_struct {
  fn setup_command < 'a > (my_struct_target : & 'a mut my_struct) -> impl FnOnce (SubCommand < 'a >) -> SubCommand < 'a > {
  | mut clp | {
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+}
+)" , "usize"))) ;
  clp }
  }
  }

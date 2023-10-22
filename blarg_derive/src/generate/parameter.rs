@@ -6,6 +6,7 @@ impl DeriveParameter {
     pub(crate) fn generate(self, parent: &syn::Ident) -> TokenStream2 {
         let DeriveParameter {
             field_name,
+            from_str_type,
             parameter_type,
             choices,
             help,
@@ -132,7 +133,7 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#choices(#parameter.help(format!("{} (default {})", #help, #field_default))));
+                            clp = clp.add(#choices(#parameter.help(format!("{} (initial: {})", #help, #field_default))));
                             #after_lines
                         }
                     }
@@ -141,7 +142,7 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#choices(#parameter.help(format!("(default {})", #field_default))));
+                            clp = clp.add(#choices(#parameter.help(format!("(initial: {})", #field_default))));
                             #after_lines
                         }
                     }
@@ -150,7 +151,7 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#parameter.help(format!("{} (default {})", #help, #field_default)));
+                            clp = clp.add(#parameter.help(format!("{} (type: {}, initial: {})", #help, #from_str_type, #field_default)));
                             #after_lines
                         }
                     }
@@ -158,7 +159,7 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#parameter.help(format!("(default {})", #field_default)));
+                            clp = clp.add(#parameter.help(format!("(type: {}, initial: {})", #from_str_type, #field_default)));
                             #after_lines
                         }
                     }
@@ -176,7 +177,7 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#choices(#parameter
-                                    .help(format!("{} (default {})", #help, #field_default))));
+                                    .help(format!("{} (initial: {})", #help, #field_default))));
                             } else {
                                 clp = clp.add(#choices(#parameter.help(#help)));
                             }
@@ -190,7 +191,7 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#choices(#parameter
-                                    .help(format!("(default {})", #field_default))));
+                                    .help(format!("(initial: {})", #field_default))));
                             } else {
                                 clp = clp.add(#choices(#parameter));
                             }
@@ -204,9 +205,9 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#parameter
-                                    .help(format!("{} (default {})", #help, #field_default)));
+                                    .help(format!("{} (type: {}, initial: {})", #help, #from_str_type, #field_default)));
                             } else {
-                                clp = clp.add(#parameter.help(#help));
+                                clp = clp.add(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
                             }
                             #after_lines
                         }
@@ -217,9 +218,10 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#parameter
-                                    .help(format!("(default {})", #field_default)));
+                                    .help(format!("(type: {}, initial: {})", #from_str_type, #field_default)));
                             } else {
-                                clp = clp.add(#parameter);
+                                clp = clp.add(#parameter
+                                    .help(format!("(type: {})", #from_str_type)));
                             }
                             #after_lines
                         }
@@ -248,19 +250,19 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        let mut clp = clp.branch(#parameter.help(#help));
+                        let mut clp = clp.branch(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
                         #after_lines
                     }
                 }
                 (None, None) => {
                     quote! {
                         #before_lines
-                        let mut clp = clp.branch(#parameter);
+                        let mut clp = clp.branch(#parameter.help(format!("(type: {})", #from_str_type)));
                         #after_lines
                     }
                 }
             },
-            _ => match (choices, help) {
+            ParameterType::Switch { .. } => match (choices, help) {
                 (Some(choices), Some(help)) => {
                     let choices = choices.tokens;
                     let help = help.tokens;
@@ -294,6 +296,40 @@ impl DeriveParameter {
                     }
                 }
             },
+            _ => match (choices, help) {
+                (Some(choices), Some(help)) => {
+                    let choices = choices.tokens;
+                    let help = help.tokens;
+                    quote! {
+                        #before_lines
+                        clp = clp.add(#choices(#parameter.help(#help)));
+                        #after_lines
+                    }
+                }
+                (Some(choices), None) => {
+                    let choices = choices.tokens;
+                    quote! {
+                        #before_lines
+                        clp = clp.add(#choices(#parameter));
+                        #after_lines
+                    }
+                }
+                (None, Some(help)) => {
+                    let help = help.tokens;
+                    quote! {
+                        #before_lines
+                        clp = clp.add(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
+                        #after_lines
+                    }
+                }
+                (None, None) => {
+                    quote! {
+                        #before_lines
+                        clp = clp.add(#parameter.help(format!("(type: {})", #from_str_type)));
+                        #after_lines
+                    }
+                }
+            },
         }
     }
 }
@@ -320,6 +356,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionArgument {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -334,8 +371,11 @@ mod tests {
 
         // Verify
         assert_eq!(
-            token_stream.to_string(),
-            "clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , \"my_field\")) ;"
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help (format ! ("(type: {
+}
+)" , "usize"))) ;
+"#
         );
     }
 
@@ -344,6 +384,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionArgument {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -371,6 +412,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionArgument {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -400,6 +442,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionArgument {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -417,7 +460,11 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help ("abc 123")) ;
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help (format ! ("{
+}
+ (type: {
+}
+)" , "abc 123" , "usize"))) ;
 "#
         );
     }
@@ -427,6 +474,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarArgument,
             choices: None,
             help: None,
@@ -437,8 +485,11 @@ mod tests {
 
         // Verify
         assert_eq!(
-            token_stream.to_string(),
-            "clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , \"my_field\")) ;"
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("(type: {
+}
+)" , "usize"))) ;
+"#
         );
     }
 
@@ -447,6 +498,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarArgument,
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -470,6 +522,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarArgument,
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -495,6 +548,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarArgument,
             choices: None,
             help: Some(DeriveValue {
@@ -508,7 +562,11 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123")) ;
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("{
+}
+ (type: {
+}
+)" , "abc 123" , "usize"))) ;
 "#
         );
     }
@@ -518,6 +576,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionOption {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -537,9 +596,11 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -549,6 +610,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionOption {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -570,7 +632,7 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(initial: {
 }
 )" , my_field_default)))) ;
 "#
@@ -582,6 +644,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionOption {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -607,7 +670,7 @@ mod tests {
 " , target . my_field) ;
  clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (initial: {
 }
 )" , "abc 123" , my_field_default)))) ;
 "#
@@ -619,6 +682,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionOption {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -642,9 +706,11 @@ mod tests {
 " , target . my_field) ;
  clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (type: {
 }
-)" , "abc 123" , my_field_default))) ;
+, initial: {
+}
+)" , "abc 123" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -654,6 +720,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::CollectionOption {
                 nargs: DeriveValue {
                     tokens: quote! { Nargs::AtLeastOne },
@@ -675,9 +742,11 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m')) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -687,6 +756,7 @@ mod tests {
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::OptionalOption { short: None },
             choices: None,
             help: None,
@@ -702,12 +772,16 @@ mod tests {
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None)) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
+}
+)" , "usize"))) ;
  }
 "#
         );
@@ -718,6 +792,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::OptionalOption { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -735,7 +810,7 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(initial: {
 }
 )" , my_field_default)))) ;
  }
@@ -750,6 +825,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::OptionalOption { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -771,7 +847,7 @@ inner}
 ") ;
  clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (initial: {
 }
 )" , "abc 123" , my_field_default)))) ;
  }
@@ -787,6 +863,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::OptionalOption { short: None },
             choices: None,
             help: Some(DeriveValue {
@@ -806,12 +883,18 @@ inner}
 ") ;
  clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (type: {
 }
-)" , "abc 123" , my_field_default))) ;
+, initial: {
+}
+)" , "abc 123" , "usize" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123")) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+}
+ (type: {
+}
+)" , "abc 123" , "usize"))) ;
  }
 "#
         );
@@ -822,6 +905,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::OptionalOption {
                 short: Some(DeriveValue {
                     tokens: Literal::character('m').into_token_stream(),
@@ -841,12 +925,16 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m'))) ;
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
+}
+)" , "usize"))) ;
  }
 "#
         );
@@ -857,6 +945,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarOption { short: None },
             choices: None,
             help: None,
@@ -869,9 +958,11 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -881,6 +972,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarOption { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -895,7 +987,7 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(default {
+ clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(initial: {
 }
 )" , my_field_default)))) ;
 "#
@@ -907,6 +999,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarOption { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -925,7 +1018,7 @@ inner}
             r#"let my_field_default = target . my_field . to_string () ;
  clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (initial: {
 }
 )" , "abc 123" , my_field_default)))) ;
 "#
@@ -937,6 +1030,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarOption { short: None },
             choices: None,
             help: Some(DeriveValue {
@@ -953,9 +1047,11 @@ inner}
             r#"let my_field_default = target . my_field . to_string () ;
  clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
 }
- (default {
+ (type: {
 }
-)" , "abc 123" , my_field_default))) ;
+, initial: {
+}
+)" , "abc 123" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -965,6 +1061,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
             parameter_type: ParameterType::ScalarOption {
                 short: Some(DeriveValue {
                     tokens: Literal::character('m').into_token_stream(),
@@ -981,9 +1078,11 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(default {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
 }
-)" , my_field_default))) ;
+, initial: {
+}
+)" , "usize" , my_field_default))) ;
 "#
         );
     }
@@ -993,6 +1092,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
             parameter_type: ParameterType::Switch { short: None },
             choices: None,
             help: None,
@@ -1013,6 +1113,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
             parameter_type: ParameterType::Switch { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -1037,6 +1138,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
             parameter_type: ParameterType::Switch { short: None },
             choices: Some(DeriveValue {
                 tokens: quote! { my_func },
@@ -1063,6 +1165,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
             parameter_type: ParameterType::Switch { short: None },
             choices: None,
             help: Some(DeriveValue {
@@ -1087,6 +1190,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
             parameter_type: ParameterType::Switch {
                 short: Some(DeriveValue {
                     tokens: Literal::character('m').into_token_stream(),
@@ -1111,6 +1215,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
             parameter_type: ParameterType::Condition {
                 commands: vec![
                     Command {
@@ -1141,7 +1246,9 @@ inner}
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field")) ;
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("(type: {
+}
+)" , "MyEnum"))) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
 "#
@@ -1153,6 +1260,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
             parameter_type: ParameterType::Condition {
                 commands: vec![
                     Command {
@@ -1197,6 +1305,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
             parameter_type: ParameterType::Condition {
                 commands: vec![
                     Command {
@@ -1243,6 +1352,7 @@ inner}
         // Setup
         let parameter = DeriveParameter {
             field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
             parameter_type: ParameterType::Condition {
                 commands: vec![
                     Command {
@@ -1275,7 +1385,11 @@ inner}
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123")) ;
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("{
+}
+ (type: {
+}
+)" , "abc 123" , "MyEnum"))) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
 "#

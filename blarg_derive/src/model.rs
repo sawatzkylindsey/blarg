@@ -62,6 +62,7 @@ pub enum ParameterType {
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParameter {
     pub field_name: syn::Ident,
+    pub from_str_type: String,
     pub parameter_type: ParameterType,
     pub choices: Option<DeriveValue>,
     pub help: Option<DeriveValue>,

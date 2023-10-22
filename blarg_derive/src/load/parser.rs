@@ -213,6 +213,7 @@ mod tests {
                 },
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
+                    from_str_type: "usize".to_string(),
                     parameter_type: ParameterType::ScalarArgument,
                     choices: None,
                     help: None,
@@ -251,6 +252,7 @@ mod tests {
                 },
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
+                    from_str_type: "usize".to_string(),
                     parameter_type: ParameterType::ScalarArgument,
                     choices: None,
                     help: None,
@@ -353,6 +355,7 @@ mod tests {
                 struct_name: ident("Parameters"),
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
+                    from_str_type: "usize".to_string(),
                     parameter_type: ParameterType::ScalarArgument,
                     choices: None,
                     help: None,

@@ -178,8 +178,56 @@ impl TryFrom<&syn::Field> for DeriveParameter {
             }
         };
 
+        let from_str_type = match &value.ty {
+            syn::Type::Path(path) => match &path.path.segments.first() {
+                Some(segment) => match &segment.arguments {
+                    syn::PathArguments::None => segment.ident.to_string(),
+                    syn::PathArguments::AngleBracketed(inner) => {
+                        let first = inner.args.first().expect("must have first arg");
+                        match first {
+                            syn::GenericArgument::Type(syn::Type::Path(ty)) => ty
+                                .path
+                                .segments
+                                .first()
+                                .expect("must have a segment")
+                                .ident
+                                .to_string(),
+                            _ => {
+                                return Err(syn::Error::new(
+                                    field_name.span(),
+                                    format!("Unsupported - field type {}<..>.", segment.ident),
+                                ));
+                            }
+                        }
+                    }
+                    syn::PathArguments::Parenthesized(_) => {
+                        let tts = &value.to_token_stream();
+                        let type_string = quote! {
+                            #tts
+                        };
+                        panic!("Parenthesized field: {type_string}");
+                    }
+                },
+                None => {
+                    let tts = &value.to_token_stream();
+                    let type_string = quote! {
+                        #tts
+                    };
+                    panic!("Empty field path: {type_string}");
+                }
+            },
+            _ => {
+                let tts = &value.ty.to_token_stream();
+                let field_string = quote! {
+                    #tts
+                };
+                panic!("Unparseable field: {field_string}");
+            }
+        };
+
         Ok(DeriveParameter {
             field_name,
+            from_str_type,
             parameter_type,
             choices,
             help,
@@ -336,6 +384,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: None,
                 help: None,
@@ -352,7 +401,7 @@ mod tests {
             arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                 colon2_token: None,
                 lt_token: Default::default(),
-                args: Default::default(),
+                args: generic("usize"),
                 gt_token: Default::default(),
             }),
         });
@@ -379,6 +428,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::OptionalOption { short: None },
                 choices: None,
                 help: None,
@@ -395,7 +445,7 @@ mod tests {
             arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                 colon2_token: None,
                 lt_token: Default::default(),
-                args: Default::default(),
+                args: generic("usize"),
                 gt_token: Default::default(),
             }),
         });
@@ -425,6 +475,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::OptionalOption {
                     short: Some(DeriveValue {
                         tokens: Literal::character('m').into_token_stream(),
@@ -467,6 +518,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "bool".to_string(),
                 parameter_type: ParameterType::Switch { short: None },
                 choices: None,
                 help: None,
@@ -483,7 +535,7 @@ mod tests {
             arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                 colon2_token: None,
                 lt_token: Default::default(),
-                args: Default::default(),
+                args: generic("usize"),
                 gt_token: Default::default(),
             }),
         });
@@ -510,6 +562,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::CollectionArgument {
                     nargs: DeriveValue {
                         tokens: quote! { Nargs::AtLeastOne }
@@ -555,6 +608,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: Some(DeriveValue {
                     tokens: quote! { <usize>::blarg_choices },
@@ -598,6 +652,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: Some(DeriveValue {
                     tokens: quote! { my_func },
@@ -641,6 +696,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: None,
                 help: Some(DeriveValue {
@@ -686,6 +742,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarOption { short: None },
                 choices: None,
                 help: None,
@@ -727,6 +784,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarOption {
                     short: Some(DeriveValue {
                         tokens: Literal::character('m').into_token_stream(),
@@ -772,6 +830,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::Condition {
                     commands: vec![
                         Command {
@@ -834,6 +893,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::Condition {
                     commands: vec![
                         Command {
@@ -863,13 +923,14 @@ mod tests {
     #[test]
     fn construct_collection_option() {
         // Setup
+
         let mut segments = syn::punctuated::Punctuated::new();
         segments.push_value(PathSegment {
             ident: ident("Vec"),
             arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                 colon2_token: None,
                 lt_token: Default::default(),
-                args: Default::default(),
+                args: generic("usize"),
                 gt_token: Default::default(),
             }),
         });
@@ -899,6 +960,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::CollectionOption {
                     nargs: DeriveValue {
                         tokens: quote! { Nargs::AtLeastOne }
@@ -920,7 +982,7 @@ mod tests {
             arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
                 colon2_token: None,
                 lt_token: Default::default(),
-                args: Default::default(),
+                args: generic("usize"),
                 gt_token: Default::default(),
             }),
         });
@@ -950,6 +1012,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::CollectionOption {
                     nargs: DeriveValue {
                         tokens: quote! { Nargs::AtLeastOne }
@@ -998,6 +1061,7 @@ mod tests {
             derive_parameter,
             DeriveParameter {
                 field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
                 parameter_type: ParameterType::ScalarArgument,
                 choices: None,
                 help: None,
@@ -1388,5 +1452,22 @@ mod tests {
 
     fn ident(name: &str) -> syn::Ident {
         syn::Ident::new(name, Span::call_site())
+    }
+
+    fn generic(name: &str) -> syn::punctuated::Punctuated<syn::GenericArgument, syn::token::Comma> {
+        let mut inner = syn::punctuated::Punctuated::new();
+        inner.push_value(PathSegment {
+            ident: ident(name),
+            arguments: PathArguments::None,
+        });
+        let mut generic = syn::punctuated::Punctuated::new();
+        generic.push_value(syn::GenericArgument::Type(syn::Type::Path(syn::TypePath {
+            qself: None,
+            path: syn::Path {
+                leading_colon: None,
+                segments: inner,
+            },
+        })));
+        generic
     }
 }
