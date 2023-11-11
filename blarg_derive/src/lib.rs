@@ -19,7 +19,7 @@ pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 /// When unspecified, defaults to the name of the cargo crate.
 /// * `#[blarg(initializer = F)]` instructs `blarg` to use the initializer method `F`.
 /// This allows for a separation between the `Default` method vs. *initial* values of the struct, which follows from `blargs`'s stance on [default & initials](../index.html#defaults--initials).
-/// When unspecified, defaults to the initializer method `default`.
+/// When unspecified, `blarg` falls back to the initializer method `default`.
 ///
 /// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
 ///

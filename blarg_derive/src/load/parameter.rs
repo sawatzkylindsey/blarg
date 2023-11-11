@@ -152,7 +152,11 @@ impl TryFrom<&syn::Field> for DeriveParameter {
                                     .collect::<Result<Vec<_>, _>>()?;
                                 ParameterType::Condition { commands }
                             } else if explicit_collection {
-                                ParameterType::CollectionArgument { nargs }
+                                if explicit_option {
+                                    ParameterType::CollectionOption { nargs, short }
+                                } else {
+                                    ParameterType::CollectionArgument { nargs }
+                                }
                             } else if explicit_option {
                                 ParameterType::ScalarOption { short }
                             } else {
@@ -923,7 +927,6 @@ mod tests {
     #[test]
     fn construct_collection_option() {
         // Setup
-
         let mut segments = syn::punctuated::Punctuated::new();
         segments.push_value(PathSegment {
             ident: ident("Vec"),
@@ -964,6 +967,58 @@ mod tests {
                 parameter_type: ParameterType::CollectionOption {
                     nargs: DeriveValue {
                         tokens: quote! { Nargs::AtLeastOne }
+                    },
+                    short: None,
+                },
+                choices: None,
+                help: None,
+            }
+        );
+    }
+
+    #[test]
+    fn construct_collection_option_both_explicit() {
+        // Setup
+        let mut segments = syn::punctuated::Punctuated::new();
+        segments.push_value(PathSegment {
+            ident: ident("Vec"),
+            arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                colon2_token: None,
+                lt_token: Default::default(),
+                args: generic("usize"),
+                gt_token: Default::default(),
+            }),
+        });
+        let attribute: syn::Attribute = parse_quote! {
+            #[blarg(option, collection = Nargs::Any)]
+        };
+        let input: syn::Field = syn::Field {
+            attrs: vec![attribute],
+            vis: syn::Visibility::Inherited,
+            mutability: syn::FieldMutability::None,
+            ident: Some(ident("my_field")),
+            colon_token: None,
+            ty: syn::Type::Path(syn::TypePath {
+                qself: None,
+                path: syn::Path {
+                    leading_colon: None,
+                    segments,
+                },
+            }),
+        };
+
+        // Execute
+        let derive_parameter = DeriveParameter::try_from(&input).unwrap();
+
+        // Verify
+        assert_eq!(
+            derive_parameter,
+            DeriveParameter {
+                field_name: ident("my_field"),
+                from_str_type: "usize".to_string(),
+                parameter_type: ParameterType::CollectionOption {
+                    nargs: DeriveValue {
+                        tokens: quote! { Nargs::Any }
                     },
                     short: None,
                 },

@@ -3,6 +3,7 @@ use blarg::{
     derive::*, prelude::*, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
     Switch,
 };
+use std::fmt::Formatter;
 
 #[derive(Debug, Default, BlargParser)]
 struct Parameters {
@@ -20,17 +21,33 @@ struct Parameters {
     falafel: bool,
     #[blarg(argument)]
     gateau: Vec<String>,
-    #[blarg(argument, collection = Nargs::Any)]
+    #[blarg(argument, collection = Nargs::Precisely(2))]
     halwa_puri: Pair<String>,
 }
 
-#[derive(Debug, Default)]
-struct Pair<T> {
+#[derive(Default)]
+struct Pair<T: std::fmt::Debug> {
     left: Option<T>,
     right: Option<T>,
 }
 
-impl<T> Collectable<T> for Pair<T> {
+impl<T: std::fmt::Debug> std::fmt::Debug for Pair<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let l: String = self
+            .left
+            .as_ref()
+            .map(|v| format!("{v:?}"))
+            .unwrap_or("".to_string());
+        let r: String = self
+            .right
+            .as_ref()
+            .map(|v| format!("{v:?}"))
+            .unwrap_or("".to_string());
+        write!(f, "({l}, {r})")
+    }
+}
+
+impl<T: std::fmt::Debug> Collectable<T> for Pair<T> {
     fn add(&mut self, item: T) {
         if self.left.is_none() {
             self.left.replace(item);

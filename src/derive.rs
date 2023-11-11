@@ -17,16 +17,16 @@
 //! $ demo_derived -h
 //! usage: demo_derived [-h] [--banana] [--daikon-root DAIKON_ROOT] APPLE CARROTS [...]
 //! positional arguments:
-//!  APPLE
-//!  CARROTS [...]
+//!  APPLE                                                          type: usize
+//!  CARROTS [...]                                                  type: u32      initial: []
 //! options:
-//!  -h, --help  Show this help message and exit.
+//!  -h, --help                  Show this help message and exit.
 //!  --banana
-//!  --daikon-root DAIKON_ROOT
+//!  --daikon-root DAIKON_ROOT                                      type: String
 //! ```
 //!
 //! ### Parameter Configuration
-//! The implicit Cli structure uses the following rules:
+//! The implicit Cli inference uses the following rules:
 //! ```console
 //! Type        | Parameter
 //! -----------------------------------
@@ -37,7 +37,7 @@
 //! T           | Parameter::argument(Scalar::new(..) , ..)
 //! ```
 //!
-//! These implicit rules do not capture all possible `blarg` configurations.
+//! Notice, these implicit rules do not capture all possible `blarg` configurations.
 //! Therefore, we provide the additional explicit configuration field attributes, which may be combined as necessary.
 //! * `#[blarg(argument)]` or `#[blarg(option)]` to explicitly use `Parameter::argument(..)` or `Parameter::option(..)`, respectively.
 //! Only one of these may be used on the same field.
@@ -66,13 +66,13 @@
 //!     fox: usize,
 //!
 //!     // .add(Parameter::argument(Collection::new(&mut parameters.jumps, Nargs::Precisely(2)), "jumps"))
-//!     // // assuming impl<T> Collectable<T> for Pair<T>
+//!     // // assuming `impl<T> Collectable<T> for Pair<T>`
 //!     #[blarg(collection = Nargs::Precisely(2))]
 //!     jumps: Pair<usize>,
 //!
 //!     // .branch(Condition::new(Scalar::new(&mut parameters.over), "over"))
-//!     // .command(0, Sub0::setup_command)  // generated via `BlargSubParser`
-//!     // .command(1, Sub1::setup_command)  // generated via `BlargSubParser`
+//!     // .command(0, Sub0::setup_command)  // assuming `Sub0` is instrumented with `BlargSubParser`
+//!     // .command(1, Sub1::setup_command)  // assuming `Sub1` is instrumented with `BlargSubParser`
 //!     #[blarg(command = (0, Sub0), command = (1, Sub1))]
 //!     over: usize,
 //! }
@@ -112,9 +112,19 @@
 //!     #[blarg(help = "do something")]
 //!     lazy: usize,
 //!
-//!     // .add(setup_choices(Parameter::argument(Scalar::new(&mut parameters.dog), "dog")))
+//!     // .add(Enumeration::setup_choices(Parameter::argument(Scalar::new(&mut parameters.dog), "dog")))
+//!     // // assuming `Enumeration` is instrumented with `BlargChoices`
+//!     #[blarg(choices)]
+//!     dog: Enumeration,
+//!
+//!     // .add(setup_choices(Parameter::argument(Scalar::new(&mut parameters.period), "period")))
 //!     #[blarg(choices = setup_choices)]
-//!     dog: usize,
+//!     period: usize,
+//! }
+//!
+//! #[derive(BlargChoices)]
+//! enum Enumeration {
+//!     ..
 //! }
 //!
 //! fn setup_choices(value: Parameter<usize>) -> Parameter<usize> {
@@ -125,10 +135,10 @@
 //! ```
 //!
 //! ### Choices
-//! In the case of enums, simply instrument with `#[derive(BlargChoices)]` to automatically generate such a setup function.
+//! In the case of enums, simply instrument with `#[derive(BlargChoices)]` to automatically generate the setup function.
 //! The enum may be configured with the following field attributes:
 //! * `#[blarg(help = "..")]` defines the help message for the variant.
-//! * `#[blarg(hidden)]` instructs `blarg` to not display the variant.
+//! * `#[blarg(hidden)]` instructs `blarg` to hide the variant.
 //!
 //! For example:
 //! ```ignore

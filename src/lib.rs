@@ -45,14 +45,15 @@
 #![doc = include_str!("../examples/demo_summer_b.rs")]
 //! ```
 //!
-//! Both of these generate the same Cli program:
+//! Both of these generate the same Cli program (with minor help message differences):
 //! ```console
 //! $ summer -h
 //! usage: summer [-h] ITEM [...]
 //! positional arguments:
 //!  ITEM [...]  The items to sum.
 //! options:
-//!  -h, --help  Show this help message and exit.
+//!  -h, --help  Show this help message and
+//!              exit.
 //!
 //! $ summer 1 2 3
 //! Sum: 6
@@ -135,7 +136,8 @@
 //! positional arguments:
 //!  ARG
 //! options:
-//!  -h, --help  Show this help message and exit.
+//!  -h, --help  Show this help message and
+//!              exit.
 //!  --opt
 //!
 //! $ sub-command 0 true

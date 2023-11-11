@@ -95,7 +95,7 @@ impl<'a> CommandLineParser<'a> {
     /// This changes the command line parser into a sub-command style command line parser.
     /// Any parameters added before the branch apply to the root parser.
     ///
-    /// Branching is always done with a `Scalar` `Parameter::argument` - aka: [`Condition`].
+    /// Branching is always done with a `Scalar` argument: [`Condition`].
     ///
     /// ### Example
     /// ```
