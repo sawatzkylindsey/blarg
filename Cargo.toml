@@ -27,5 +27,5 @@ all-features = true
 unit_test = ["blarg_builder/unit_test"]
 
 [dependencies]
-blarg_builder = { path = "./blarg_builder" }
-blarg_derive = { path = "./blarg_derive" }
+blarg_builder = { version = "1.0.0", path = "./blarg_builder" }
+blarg_derive = { version = "1.0.0", path = "./blarg_derive" }
