@@ -4,6 +4,7 @@ mod parameter;
 mod parser;
 
 pub(self) fn incompatible_error(
+    context: &str,
     field_name: &syn::Ident,
     left: impl Into<String>,
     right: impl Into<String>,
@@ -11,7 +12,7 @@ pub(self) fn incompatible_error(
     syn::Error::new(
         field_name.span(),
         format!(
-            "Invalid - field cannot be both `{}` and `{}`.",
+            "Invalid - {context} cannot be both `{}` and `{}`.",
             left.into(),
             right.into(),
         ),

@@ -81,6 +81,7 @@ impl TryFrom<&syn::Field> for DeriveParameter {
 
         if explicit_argument && explicit_option {
             return Err(incompatible_error(
+                "field",
                 &field_name,
                 "#[blarg(argument)]",
                 "#[blarg(option)]",
@@ -89,6 +90,7 @@ impl TryFrom<&syn::Field> for DeriveParameter {
 
         if explicit_command && explicit_option {
             return Err(incompatible_error(
+                "field",
                 &field_name,
                 "#[blarg(command = ..)]",
                 "#[blarg(option)]",
@@ -97,6 +99,7 @@ impl TryFrom<&syn::Field> for DeriveParameter {
 
         if explicit_command && explicit_collection {
             return Err(incompatible_error(
+                "field",
                 &field_name,
                 "#[blarg(command = ..)]",
                 "#[blarg(collection = ..)]",
@@ -294,6 +297,7 @@ fn disallow(
     for (condition, name) in condition_names {
         if **condition {
             return Err(incompatible_error(
+                "field",
                 field_name,
                 antecedent,
                 format!("#[blarg({name})]").as_str(),

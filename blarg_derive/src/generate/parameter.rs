@@ -1,9 +1,9 @@
-use crate::model::{Command, DeriveParameter, DeriveValue, ParameterType};
+use crate::model::{Command, DeriveParameter, DeriveValue, Hints, ParameterType};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
 impl DeriveParameter {
-    pub(crate) fn generate(self, parent: &syn::Ident) -> TokenStream2 {
+    pub(crate) fn generate(self, parent: &syn::Ident, hints: &Hints) -> TokenStream2 {
         let DeriveParameter {
             field_name,
             from_str_type,
@@ -145,22 +145,43 @@ impl DeriveParameter {
                 }
                 (None, Some(help)) => {
                     let help = help.tokens;
-                    quote! {
-                        #before_lines
-                        clp = clp.add(#parameter
-                            .help(#help)
-                            .meta(vec![format!("type: {}", #from_str_type)]));
-                        #after_lines
+                    match hints {
+                        Hints::On => {
+                            quote! {
+                                #before_lines
+                                clp = clp.add(#parameter
+                                    .help(#help)
+                                    .meta(vec![format!("type: {}", #from_str_type)]));
+                                #after_lines
+                            }
+                        }
+                        Hints::Off => {
+                            quote! {
+                                #before_lines
+                                clp = clp.add(#parameter
+                                    .help(#help));
+                                #after_lines
+                            }
+                        }
                     }
                 }
-                (None, None) => {
-                    quote! {
-                        #before_lines
-                        clp = clp.add(#parameter
-                            .meta(vec![format!("type: {}", #from_str_type)]));
-                        #after_lines
+                (None, None) => match hints {
+                    Hints::On => {
+                        quote! {
+                            #before_lines
+                            clp = clp.add(#parameter
+                                .meta(vec![format!("type: {}", #from_str_type)]));
+                            #after_lines
+                        }
                     }
-                }
+                    Hints::Off => {
+                        quote! {
+                            #before_lines
+                            clp = clp.add(#parameter);
+                            #after_lines
+                        }
+                    }
+                },
             },
             ParameterType::CollectionArgument { .. }
             | ParameterType::CollectionOption { .. }
@@ -170,45 +191,90 @@ impl DeriveParameter {
                     (Some(choices), Some(help)) => {
                         let choices = choices.tokens;
                         let help = help.tokens;
-                        quote! {
-                            #before_lines
-                            #default
-                            clp = clp.add(#choices(#parameter
-                                .help(#help)
-                                .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
-                            #after_lines
+
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    #default
+                                    clp = clp.add(#choices(#parameter
+                                        .help(#help)
+                                        .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
+                                    #after_lines
+                                }
+                            }
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#choices(#parameter
+                                        .help(#help)));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
                     (Some(choices), None) => {
                         let choices = choices.tokens;
-                        quote! {
-                            #before_lines
-                            #default
-                            clp = clp.add(#choices(#parameter
-                                .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
-                            #after_lines
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    #default
+                                    clp = clp.add(#choices(#parameter
+                                        .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
+                                    #after_lines
+                                }
+                            }
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#choices(#parameter));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
                     (None, Some(help)) => {
                         let help = help.tokens;
-                        quote! {
-                            #before_lines
-                            #default
-                            clp = clp.add(#parameter
-                                .help(#help)
-                                .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
-                            #after_lines
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    #default
+                                    clp = clp.add(#parameter
+                                        .help(#help)
+                                        .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
+                                    #after_lines
+                                }
+                            }
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#parameter
+                                        .help(#help));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
-                    (None, None) => {
-                        quote! {
-                            #before_lines
-                            #default
-                            clp = clp.add(#parameter
-                                .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
-                            #after_lines
+                    (None, None) => match hints {
+                        Hints::On => {
+                            quote! {
+                                #before_lines
+                                #default
+                                clp = clp.add(#parameter
+                                    .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
+                                #after_lines
+                            }
                         }
-                    }
+                        Hints::Off => {
+                            quote! {
+                                #before_lines
+                                clp = clp.add(#parameter);
+                                #after_lines
+                            }
+                        }
+                    },
                 }
             }
             ParameterType::OptionalOption { .. } => {
@@ -218,65 +284,109 @@ impl DeriveParameter {
                     (Some(choices), Some(help)) => {
                         let choices = choices.tokens;
                         let help = help.tokens;
-                        quote! {
-                            #before_lines
-                            if let Some(inner) = #parent.#field_name.as_ref() {
-                                let #field_default = format!("{inner}");
-                                clp = clp.add(#choices(#parameter
-                                    .help(#help)
-                                    .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
-                            } else {
-                                clp = clp.add(#choices(#parameter
-                                    .help(#help)));
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    if let Some(inner) = #parent.#field_name.as_ref() {
+                                        let #field_default = format!("{inner}");
+                                        clp = clp.add(#choices(#parameter
+                                            .help(#help)
+                                            .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
+                                    } else {
+                                        clp = clp.add(#choices(#parameter
+                                            .help(#help)));
+                                    }
+                                    #after_lines
+                                }
                             }
-                            #after_lines
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#choices(#parameter
+                                        .help(#help)));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
                     (Some(choices), None) => {
                         let choices = choices.tokens;
-                        quote! {
-                            #before_lines
-                            if let Some(inner) = #parent.#field_name.as_ref() {
-                                let #field_default = format!("{inner}");
-                                clp = clp.add(#choices(#parameter
-                                    .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
-                            } else {
-                                clp = clp.add(#choices(#parameter));
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    if let Some(inner) = #parent.#field_name.as_ref() {
+                                        let #field_default = format!("{inner}");
+                                        clp = clp.add(#choices(#parameter
+                                            .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
+                                    } else {
+                                        clp = clp.add(#choices(#parameter));
+                                    }
+                                    #after_lines
+                                }
                             }
-                            #after_lines
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#choices(#parameter));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
                     (None, Some(help)) => {
                         let help = help.tokens;
-                        quote! {
-                            #before_lines
-                            if let Some(inner) = #parent.#field_name.as_ref() {
-                                let #field_default = format!("{inner}");
-                                clp = clp.add(#parameter
-                                    .help(#help)
-                                    .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
-                            } else {
-                                clp = clp.add(#parameter
-                                    .help(#help)
-                                    .meta(vec![format!("type: {}", #from_str_type)]));
+                        match hints {
+                            Hints::On => {
+                                quote! {
+                                    #before_lines
+                                    if let Some(inner) = #parent.#field_name.as_ref() {
+                                        let #field_default = format!("{inner}");
+                                        clp = clp.add(#parameter
+                                            .help(#help)
+                                            .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
+                                    } else {
+                                        clp = clp.add(#parameter
+                                            .help(#help)
+                                            .meta(vec![format!("type: {}", #from_str_type)]));
+                                    }
+                                    #after_lines
+                                }
                             }
-                            #after_lines
+                            Hints::Off => {
+                                quote! {
+                                    #before_lines
+                                    clp = clp.add(#parameter
+                                        .help(#help));
+                                    #after_lines
+                                }
+                            }
                         }
                     }
-                    (None, None) => {
-                        quote! {
-                            #before_lines
-                            if let Some(inner) = #parent.#field_name.as_ref() {
-                                let #field_default = format!("{inner}");
-                                clp = clp.add(#parameter
-                                    .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
-                            } else {
-                                clp = clp.add(#parameter
-                                    .meta(vec![format!("type: {}", #from_str_type)]));
+                    (None, None) => match hints {
+                        Hints::On => {
+                            quote! {
+                                #before_lines
+                                if let Some(inner) = #parent.#field_name.as_ref() {
+                                    let #field_default = format!("{inner}");
+                                    clp = clp.add(#parameter
+                                        .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
+                                } else {
+                                    clp = clp.add(#parameter
+                                        .meta(vec![format!("type: {}", #from_str_type)]));
+                                }
+                                #after_lines
                             }
-                            #after_lines
                         }
-                    }
+                        Hints::Off => {
+                            quote! {
+                                #before_lines
+                                clp = clp.add(#parameter);
+                                #after_lines
+                            }
+                        }
+                    },
                 }
             }
             ParameterType::Condition { .. } => match (choices, help) {
@@ -300,22 +410,43 @@ impl DeriveParameter {
                 }
                 (None, Some(help)) => {
                     let help = help.tokens;
-                    quote! {
-                        #before_lines
-                        let mut clp = clp.branch(#parameter
-                            .help(#help)
-                            .meta(vec![format!("type: {}", #from_str_type)]));
-                        #after_lines
+                    match hints {
+                        Hints::On => {
+                            quote! {
+                                #before_lines
+                                let mut clp = clp.branch(#parameter
+                                    .help(#help)
+                                    .meta(vec![format!("type: {}", #from_str_type)]));
+                                #after_lines
+                            }
+                        }
+                        Hints::Off => {
+                            quote! {
+                                #before_lines
+                                let mut clp = clp.branch(#parameter
+                                    .help(#help));
+                                #after_lines
+                            }
+                        }
                     }
                 }
-                (None, None) => {
-                    quote! {
-                        #before_lines
-                        let mut clp = clp.branch(#parameter
-                            .meta(vec![format!("type: {}", #from_str_type)]));
-                        #after_lines
+                (None, None) => match hints {
+                    Hints::On => {
+                        quote! {
+                            #before_lines
+                            let mut clp = clp.branch(#parameter
+                                .meta(vec![format!("type: {}", #from_str_type)]));
+                            #after_lines
+                        }
                     }
-                }
+                    Hints::Off => {
+                        quote! {
+                            #before_lines
+                            let mut clp = clp.branch(#parameter);
+                            #after_lines
+                        }
+                    }
+                },
             },
             ParameterType::Switch { .. } => match (choices, help) {
                 (Some(choices), Some(help)) => {
@@ -374,6 +505,8 @@ mod tests {
     use proc_macro2::Span;
     use quote::ToTokens;
 
+    //# Hints On
+
     #[test]
     fn render_collection_argument() {
         // Setup
@@ -390,7 +523,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -425,7 +558,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -460,7 +593,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -493,7 +626,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -522,7 +655,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -548,7 +681,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -574,7 +707,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -598,7 +731,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -627,7 +760,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -663,7 +796,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -699,7 +832,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -733,7 +866,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -769,7 +902,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -798,7 +931,7 @@ mod tests {
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -836,7 +969,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -871,7 +1004,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -905,7 +1038,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -945,7 +1078,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -981,7 +1114,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1010,7 +1143,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1039,7 +1172,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1066,7 +1199,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1097,7 +1230,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1124,7 +1257,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1147,7 +1280,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1174,7 +1307,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1199,7 +1332,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1226,7 +1359,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1266,7 +1399,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1313,7 +1446,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1360,7 +1493,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1405,7 +1538,7 @@ inner}
         };
 
         // Execute
-        let token_stream = parameter.generate(&ident("target"));
+        let token_stream = parameter.generate(&ident("target"), &Hints::On);
 
         // Verify
         assert_eq!(
@@ -1413,6 +1546,907 @@ inner}
             r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
 " , "MyEnum")])) ;
+ clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
+ clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
+"#
+        );
+    }
+
+    //# Hints Off
+
+    #[test]
+    fn render_collection_argument_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionArgument {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_argument_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionArgument {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_argument_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionArgument {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help ("abc 123"))) ;
+"#
+        );
+        // Verify
+    }
+
+    #[test]
+    fn render_collection_argument_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionArgument {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+            },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_argument_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarArgument,
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_argument_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarArgument,
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_argument_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarArgument,
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_argument_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarArgument,
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_option_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionOption {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+                short: None,
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_option_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionOption {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+                short: None,
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_option_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionOption {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+                short: None,
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help ("abc 123"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_option_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionOption {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+                short: None,
+            },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_collection_option_short_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::CollectionOption {
+                nargs: DeriveValue {
+                    tokens: quote! { Nargs::AtLeastOne },
+                },
+                short: Some(DeriveValue {
+                    tokens: Literal::character('m').into_token_stream(),
+                }),
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m'))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_optional_option_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::OptionalOption { short: None },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_optional_option_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::OptionalOption { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None))) ;
+"#
+        );
+    }
+    #[test]
+    fn render_optional_option_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::OptionalOption { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_optional_option_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::OptionalOption { short: None },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_optional_option_short_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::OptionalOption {
+                short: Some(DeriveValue {
+                    tokens: Literal::character('m').into_token_stream(),
+                }),
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m'))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_option_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarOption { short: None },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_option_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarOption { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_option_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarOption { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_option_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarOption { short: None },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_scalar_option_short_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "usize".to_string(),
+            parameter_type: ParameterType::ScalarOption {
+                short: Some(DeriveValue {
+                    tokens: Literal::character('m').into_token_stream(),
+                }),
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m'))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_switch_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
+            parameter_type: ParameterType::Switch { short: None },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            token_stream.to_string(),
+            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my-field\" , None)) ;"
+        );
+    }
+
+    #[test]
+    fn render_switch_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
+            parameter_type: ParameterType::Switch { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let my_field_target = target . my_field . clone () ;
+ clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_switch_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
+            parameter_type: ParameterType::Switch { short: None },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let my_field_target = target . my_field . clone () ;
+ clp = clp . add (my_func (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None) . help ("abc 123"))) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_switch_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
+            parameter_type: ParameterType::Switch { short: None },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let my_field_target = target . my_field . clone () ;
+ clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , "my-field" , None) . help ("abc 123")) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_switch_short_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "bool".to_string(),
+            parameter_type: ParameterType::Switch {
+                short: Some(DeriveValue {
+                    tokens: Literal::character('m').into_token_stream(),
+                }),
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            token_stream.to_string(),
+            "let my_field_target = target . my_field . clone () ; clp = clp . add (Parameter :: option (Switch :: new (& mut target . my_field , ! my_field_target) , \"my-field\" , Some ('m'))) ;"
+        );
+    }
+
+    #[test]
+    fn render_condition_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
+            parameter_type: ParameterType::Condition {
+                commands: vec![
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(0).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Abc").to_token_stream(),
+                        },
+                    },
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(1).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Def").to_token_stream(),
+                        },
+                    },
+                ],
+            },
+            choices: None,
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field")) ;
+ clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
+ clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_condition_choices_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
+            parameter_type: ParameterType::Condition {
+                commands: vec![
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(0).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Abc").to_token_stream(),
+                        },
+                    },
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(1).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Def").to_token_stream(),
+                        },
+                    },
+                ],
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: None,
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let mut clp = clp . branch (my_func (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field"))) ;
+ clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
+ clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_condition_choices_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
+            parameter_type: ParameterType::Condition {
+                commands: vec![
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(0).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Abc").to_token_stream(),
+                        },
+                    },
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(1).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Def").to_token_stream(),
+                        },
+                    },
+                ],
+            },
+            choices: Some(DeriveValue {
+                tokens: quote! { my_func },
+            }),
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let mut clp = clp . branch (my_func (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123"))) ;
+ clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
+ clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
+"#
+        );
+    }
+
+    #[test]
+    fn render_condition_help_hintsoff() {
+        // Setup
+        let parameter = DeriveParameter {
+            field_name: ident("my_field"),
+            from_str_type: "MyEnum".to_string(),
+            parameter_type: ParameterType::Condition {
+                commands: vec![
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(0).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Abc").to_token_stream(),
+                        },
+                    },
+                    Command {
+                        variant: DeriveValue {
+                            tokens: Literal::usize_unsuffixed(1).into_token_stream(),
+                        },
+                        command_struct: DeriveValue {
+                            tokens: ident("Def").to_token_stream(),
+                        },
+                    },
+                ],
+            },
+            choices: None,
+            help: Some(DeriveValue {
+                tokens: Literal::string("abc 123").to_token_stream(),
+            }),
+        };
+
+        // Execute
+        let token_stream = parameter.generate(&ident("target"), &Hints::Off);
+
+        // Verify
+        assert_eq!(
+            simple_format(token_stream.to_string()),
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123")) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
 "#

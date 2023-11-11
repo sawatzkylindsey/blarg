@@ -10,6 +10,7 @@ impl From<DeriveParser> for TokenStream2 {
             program,
             initializer,
             parameters,
+            hints,
         } = value;
         let program = program.tokens;
         let initializer = initializer.tokens;
@@ -46,7 +47,7 @@ impl From<DeriveParser> for TokenStream2 {
         } else {
             let fields: Vec<_> = parameters
                 .into_iter()
-                .map(|p| p.generate(&struct_target))
+                .map(|p| p.generate(&struct_target, &hints))
                 .collect();
 
             quote! {
@@ -76,12 +77,13 @@ impl From<DeriveSubParser> for TokenStream2 {
         let DeriveSubParser {
             struct_name,
             parameters,
+            hints,
         } = value;
 
         let struct_target = format_ident!("{struct_name}_target");
         let fields: Vec<_> = parameters
             .into_iter()
-            .map(|p| p.generate(&struct_target))
+            .map(|p| p.generate(&struct_target, &hints))
             .collect();
 
         let clp = if fields.is_empty() {
@@ -109,7 +111,7 @@ impl From<DeriveSubParser> for TokenStream2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Command, DeriveParameter, DeriveValue, ParameterType};
+    use crate::model::{Command, DeriveParameter, DeriveValue, Hints, ParameterType};
     use proc_macro2::Literal;
     use proc_macro2::Span;
     use quote::ToTokens;
@@ -126,6 +128,7 @@ mod tests {
                 tokens: quote! { env!("CARGO_CRATE_NAME") },
             },
             parameters: vec![],
+            hints: Hints::Off,
         };
 
         // Execute
@@ -164,6 +167,7 @@ mod tests {
                 choices: None,
                 help: None,
             }],
+            hints: Hints::Off,
         };
 
         // Execute
@@ -176,9 +180,7 @@ mod tests {
  fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
-}
-" , "usize")])) ;
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
  my_struct_target }
@@ -224,6 +226,7 @@ mod tests {
                 choices: None,
                 help: None,
             }],
+            hints: Hints::Off,
         };
 
         // Execute
@@ -238,9 +241,7 @@ mod tests {
  let mut Abc_target = < Abc > :: default () ;
  let mut Def_target = < Def > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
-}
-" , "usize")])) ;
+ let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
@@ -257,6 +258,7 @@ mod tests {
         let sub_parser = DeriveSubParser {
             struct_name: ident("my_struct"),
             parameters: vec![],
+            hints: Hints::Off,
         };
 
         // Execute
@@ -285,6 +287,7 @@ mod tests {
                 choices: None,
                 help: None,
             }],
+            hints: Hints::Off,
         };
 
         // Execute
@@ -296,9 +299,7 @@ mod tests {
             r#"impl my_struct {
  fn setup_command < 'a > (my_struct_target : & 'a mut my_struct) -> impl FnOnce (SubCommand < 'a >) -> SubCommand < 'a > {
  | mut clp | {
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
-}
-" , "usize")])) ;
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field")) ;
  clp }
  }
  }

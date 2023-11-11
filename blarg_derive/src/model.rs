@@ -69,17 +69,25 @@ pub struct DeriveParameter {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Hints {
+    On,
+    Off,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct DeriveParser {
     pub struct_name: syn::Ident,
     pub program: DeriveValue,
     pub initializer: DeriveValue,
     pub parameters: Vec<DeriveParameter>,
+    pub hints: Hints,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct DeriveSubParser {
     pub struct_name: syn::Ident,
     pub parameters: Vec<DeriveParameter>,
+    pub hints: Hints,
 }
 
 #[derive(Debug, PartialEq, Eq)]

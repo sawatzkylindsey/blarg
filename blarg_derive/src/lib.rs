@@ -20,13 +20,15 @@ pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 /// * `#[blarg(initializer = F)]` instructs `blarg` to use the initializer method `F`.
 /// This allows for a separation between the `Default` method vs. *initial* values of the struct, which follows from `blargs`'s stance on [default & initials](../index.html#defaults--initials).
 /// When unspecified, `blarg` falls back to the initializer method `default`.
+/// * `#[blarg(hints_off)]` disables the type/initial documentation hints.
+/// When unspecified, `blarg` automatically generates type/initial documentation via the "meta" documentation mechanism ([parameter meta](../struct.Parameter.html#method.meta) or [condition meta](../struct.Condition.html#method.meta)).
 ///
 /// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
 ///
 /// ### Example
 /// ```ignore
 /// #[derive(BlargParser)]
-/// #[blarg(program = "my-program", initializer = init)]
+/// #[blarg(program = "my-program", initializer = init, hints_off)]
 /// struct MyCli {
 /// }
 ///
@@ -57,14 +59,18 @@ pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
 
 /// The derive macro which turns a struct into a `SubCommandParser`.
 ///
-/// Supports no struct attributes.
-/// However take note: the *initializer* method is inherited from that of the [`BlargParser`].
+/// Supports the following struct attributes:
+/// * `#[blarg(hints_off)]` disables the type/initial documentation hints.
+/// When unspecified, `blarg` automatically generates type/initial documentation via the "meta" documentation mechanism ([parameter meta](../struct.Parameter.html#method.meta) or [condition meta](../struct.Condition.html#method.meta)).
+///
+/// Additionally, take note: the *initializer* method is inherited from that of the [`BlargParser`].
 ///
 /// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
 ///
 /// ### Example
 /// ```ignore
 /// #[derive(BlargSubParser)]
+/// #[blarg(hints_off)]
 /// struct MySubCli {
 /// }
 ///

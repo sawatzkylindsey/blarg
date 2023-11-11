@@ -1,3 +1,5 @@
+use crate::load::incompatible_error;
+use crate::model::Hints;
 use crate::{
     model::{
         DeriveParameter, DeriveParser, DeriveSubParser, DeriveValue, IntermediateAttributes,
@@ -40,6 +42,21 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
         };
         let parser_name = &value.ident;
 
+        let hints = if attributes.singletons.contains("hints_off") {
+            if attributes.singletons.contains("hints_on") {
+                return Err(incompatible_error(
+                    "struct",
+                    &parser_name,
+                    "#[blarg(hints_on)]",
+                    "#[blarg(hints_off)]",
+                ));
+            } else {
+                Hints::Off
+            }
+        } else {
+            Hints::On
+        };
+
         match &value.data {
             syn::Data::Struct(ds) => {
                 let parameters = match ds {
@@ -80,6 +97,7 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                         tokens: initializer.into(),
                     },
                     parameters,
+                    hints,
                 };
                 // println!("{cli_parser:?}");
                 Ok(cli_parser)
@@ -96,7 +114,29 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
     type Error = syn::Error;
 
     fn try_from(value: syn::DeriveInput) -> Result<Self, Self::Error> {
+        let mut attributes = IntermediateAttributes::default();
+        for attribute in &value.attrs {
+            if attribute.path().is_ident("blarg") {
+                attributes = IntermediateAttributes::from(attribute);
+            }
+        }
+
         let parser_name = &value.ident;
+
+        let hints = if attributes.singletons.contains("hints_off") {
+            if attributes.singletons.contains("hints_on") {
+                return Err(incompatible_error(
+                    "struct",
+                    &parser_name,
+                    "#[blarg(hints_on)]",
+                    "#[blarg(hints_off)]",
+                ));
+            } else {
+                Hints::Off
+            }
+        } else {
+            Hints::On
+        };
 
         match &value.data {
             syn::Data::Struct(ds) => {
@@ -132,6 +172,7 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
                 let cli_sub_parser = DeriveSubParser {
                     struct_name: parser_name.clone(),
                     parameters,
+                    hints,
                 };
                 // println!("{cli_sub_parser:?}");
                 Ok(cli_sub_parser)
@@ -180,6 +221,7 @@ mod tests {
                     tokens: quote! { default }.into_token_stream()
                 },
                 parameters: Vec::default(),
+                hints: Hints::On,
             }
         );
     }
@@ -218,6 +260,7 @@ mod tests {
                     choices: None,
                     help: None,
                 }],
+                hints: Hints::On,
             }
         );
     }
@@ -228,7 +271,7 @@ mod tests {
         let input: syn::DeriveInput = syn::parse_str(
             r#"
                 #[derive(Default, BlargParser)]
-                #[blarg(program = "abc")]
+                #[blarg(program = "abc", initializer = qwerty, hints_off)]
                 struct Parameters {
                     apple: usize,
                 }
@@ -248,7 +291,7 @@ mod tests {
                     tokens: Literal::string("abc").into_token_stream()
                 },
                 initializer: DeriveValue {
-                    tokens: quote! { default }.into_token_stream()
+                    tokens: quote! { qwerty }.into_token_stream()
                 },
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
@@ -257,7 +300,32 @@ mod tests {
                     choices: None,
                     help: None,
                 }],
+                hints: Hints::Off,
             }
+        );
+    }
+
+    #[test]
+    fn construct_derive_parser_hints_offon() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(Default, BlargParser)]
+                #[blarg(hints_off, hints_on)]
+                struct Parameters {
+                    apple: usize,
+                }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let error = DeriveParser::try_from(input).unwrap_err();
+
+        // Verify
+        assert_eq!(
+            error.to_string(),
+            "Invalid - struct cannot be both `#[blarg(hints_on)]` and `#[blarg(hints_off)]`."
         );
     }
 
@@ -328,6 +396,7 @@ mod tests {
             DeriveSubParser {
                 struct_name: ident("Parameters"),
                 parameters: Vec::default(),
+                hints: Hints::On,
             }
         );
     }
@@ -360,7 +429,66 @@ mod tests {
                     choices: None,
                     help: None,
                 }],
+                hints: Hints::On,
             }
+        );
+    }
+
+    #[test]
+    fn construct_derive_sub_parser_with_attributes() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(Default, BlargSubParser)]
+                #[blarg(hints_off)]
+                struct Parameters {
+                    apple: usize,
+                }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let derive_sub_parser = DeriveSubParser::try_from(input).unwrap();
+
+        // Verify
+        assert_eq!(
+            derive_sub_parser,
+            DeriveSubParser {
+                struct_name: ident("Parameters"),
+                parameters: vec![DeriveParameter {
+                    field_name: ident("apple"),
+                    from_str_type: "usize".to_string(),
+                    parameter_type: ParameterType::ScalarArgument,
+                    choices: None,
+                    help: None,
+                }],
+                hints: Hints::Off,
+            }
+        );
+    }
+
+    #[test]
+    fn construct_derive_sub_parser_hints_offon() {
+        // Setup
+        let input: syn::DeriveInput = syn::parse_str(
+            r#"
+                #[derive(Default, BlargSubParser)]
+                #[blarg(hints_off, hints_on)]
+                struct Parameters {
+                    apple: usize,
+                }
+            "#,
+        )
+        .unwrap();
+
+        // Execute
+        let error = DeriveSubParser::try_from(input).unwrap_err();
+
+        // Verify
+        assert_eq!(
+            error.to_string(),
+            "Invalid - struct cannot be both `#[blarg(hints_on)]` and `#[blarg(hints_off)]`."
         );
     }
 

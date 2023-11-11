@@ -40,7 +40,7 @@
 //! ```no_run
 #![doc = include_str!("../examples/demo_summer_d.rs")]
 //! ```
-//! or equivalently via builder Api:
+//! or equivalently via builder Api (this page):
 //! ```no_run
 #![doc = include_str!("../examples/demo_summer_b.rs")]
 //! ```
