@@ -61,7 +61,7 @@ fn main() {
     let parser = ap
         .add(
             Parameter::option(Switch::new(&mut _verbose, true), "verbose", Some('v'))
-                .help("Do dee doo."),
+                .help("Do dee doo.  We're really stretching here HAAAAAAAA HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA!"),
         )
         .add(
             Parameter::option(Scalar::new(&mut operand), "operand", Some('o'))

@@ -292,10 +292,13 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
 }
 
 impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, T> {
-    /// Document a choice for the sub-command condition.
+    /// Document a choice's help message for the sub-command condition.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the sub-command condition.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
+    ///
+    /// A choice help message describes the variant in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
     /// To limit the parser semantics, be sure to use an enum.
@@ -339,7 +342,7 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, 
     /// Condition::new(Scalar::new(&mut foo_bar), "foo_bar")
     ///     .choice(FooBar::Foo, "--this will get discarded--")
     ///     .choice(FooBar::Foo, "Do foo'y things.")
-    ///     .choice(FooBar::Bar, "Do bar'y things.");
+    ///     .choice(FooBar::Bar, "Do bar'y things.  Description may include multiple sentences.");
     /// ```
     fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let inner = self.0;
@@ -469,10 +472,13 @@ impl<'a, T> Parameter<'a, T> {
 }
 
 impl<'a, T: std::fmt::Display> Choices<T> for Parameter<'a, T> {
-    /// Document a choice for this parameter.
+    /// Document a choice's help message for this parameter.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the parameter.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
+    ///
+    /// A choice help message describes the variant in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
     /// To limit the parser semantics, be sure to use an enum.
@@ -491,7 +497,7 @@ impl<'a, T: std::fmt::Display> Choices<T> for Parameter<'a, T> {
     /// Parameter::argument(Scalar::new(&mut door), "door")
     ///     .choice(1, "--this will get discarded--")
     ///     .choice(1, "Enter door #1.")
-    ///     .choice(2, "Enter door #2.");
+    ///     .choice(2, "Enter door #2.  Description may include multiple sentences.");
     /// ```
     fn choice(self, variant: T, description: impl Into<String>) -> Self {
         let mut inner = self.0;
