@@ -42,7 +42,8 @@ pub(super) struct ParameterInner<'a, T> {
     nargs: Nargs,
     name: String,
     short: Option<char>,
-    description: Option<String>,
+    help: Option<String>,
+    meta: Option<Vec<String>>,
     choices: HashMap<String, String>,
 }
 
@@ -69,7 +70,7 @@ impl<'a, T> std::fmt::Debug for ParameterInner<'a, T> {
             },
             ParameterClass::Arg => "".to_string(),
         };
-        let description = if let Some(d) = &self.description {
+        let help = if let Some(d) = &self.help {
             format!(", {d}")
         } else {
             "".to_string()
@@ -77,7 +78,7 @@ impl<'a, T> std::fmt::Debug for ParameterInner<'a, T> {
 
         write!(
             f,
-            "{class}[{t}, {nargs}, {name},{short} {description}]",
+            "{class}[{t}, {nargs}, {name},{short} {help}]",
             t = std::any::type_name::<T>(),
             nargs = self.nargs,
         )
@@ -108,7 +109,8 @@ impl<'a, T> From<&ParameterInner<'a, T>> for OptionParameter {
             value.name.clone(),
             value.short.clone(),
             value.nargs,
-            value.description.clone(),
+            value.help.clone(),
+            value.meta.clone(),
             value.choices.clone(),
         )
     }
@@ -133,7 +135,8 @@ impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentParameter {
         ArgumentParameter::new(
             value.name.clone(),
             value.nargs,
-            value.description.clone(),
+            value.help.clone(),
+            value.meta.clone(),
             value.choices.clone(),
         )
     }
@@ -236,6 +239,13 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
     /// Document the help message for this sub-command condition.
     /// If repeated, only the final message will apply to the sub-command condition.
     ///
+    /// A help message describes the condition in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
+    ///
+    /// See also:
+    /// * [`Condition::meta`]
+    /// * [`Condition::choice`]
+    ///
     /// ### Example
     /// ```
     /// # use blarg_builder as blarg;
@@ -244,11 +254,36 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
     /// let mut case: u32 = 0;
     /// Condition::new(Scalar::new(&mut case), "case")
     ///     .help("--this will get discarded--")
-    ///     .help("Choose the 'case' to execute.");
+    ///     .help("Choose the 'case' to execute.  Description may include multiple sentences.");
     /// ```
     pub fn help(self, description: impl Into<String>) -> Self {
         let inner = self.0;
         Self(inner.help(description))
+    }
+
+    /// Document the meta message(s) for this sub-command condition.
+    /// If repeated, only the final message will apply to the sub-command condition.
+    ///
+    /// Meta message(s) describe short format extra details about the condition.
+    /// We recommend non-sentence information for this field.
+    ///
+    /// See also:
+    /// * [`Condition::help`]
+    /// * [`Condition::choice`]
+    ///
+    /// ### Example
+    /// ```
+    /// # use blarg_builder as blarg;
+    /// use blarg::{Condition, Scalar};
+    ///
+    /// let mut case: u32 = 0;
+    /// Condition::new(Scalar::new(&mut case), "case")
+    ///     .meta(vec!["--this will get discarded--"])
+    ///     .meta(vec!["final extra", "details"]);
+    /// ```
+    pub fn meta(self, description: Vec<impl Into<String>>) -> Self {
+        let inner = self.0;
+        Self(inner.meta(description))
     }
 
     pub(super) fn consume(self) -> Parameter<'a, T> {
@@ -257,13 +292,17 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
 }
 
 impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, T> {
-    /// Document a choice in the help message for the sub-command condition.
+    /// Document a choice for the sub-command condition.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the sub-command condition.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
     /// To limit the parser semantics, be sure to use an enum.
+    ///
+    /// See also:
+    /// * [`Condition::help`]
+    /// * [`Condition::meta`]
     ///
     /// ### Example
     /// ```
@@ -335,7 +374,8 @@ impl<'a, T> Parameter<'a, T> {
             nargs,
             name: name.into(),
             short,
-            description: None,
+            help: None,
+            meta: None,
             choices: HashMap::default(),
         })
     }
@@ -361,13 +401,21 @@ impl<'a, T> Parameter<'a, T> {
             nargs,
             name: name.into(),
             short: None,
-            description: None,
+            help: None,
+            meta: None,
             choices: HashMap::default(),
         })
     }
 
     /// Document the help message for this parameter.
     /// If repeated, only the final message will apply to the parameter.
+    ///
+    /// A help message describes the parameter in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
+    ///
+    /// See also:
+    /// * [`Parameter::meta`]
+    /// * [`Parameter::choice`]
     ///
     /// ### Example
     /// ```
@@ -377,11 +425,37 @@ impl<'a, T> Parameter<'a, T> {
     /// let mut verbose: bool = false;
     /// Parameter::argument(Scalar::new(&mut verbose), "verbose")
     ///     .help("--this will get discarded--")
-    ///     .help("Make the program output verbose.");
+    ///     .help("Make the program output verbose.  Description may include multiple sentences.");
     /// ```
     pub fn help(self, description: impl Into<String>) -> Self {
         let mut inner = self.0;
-        inner.description = Some(description.into());
+        inner.help = Some(description.into());
+        Self(inner)
+    }
+
+    /// Document the meta message(s) for this parameter.
+    /// If repeated, only the final message will apply to the parameter.
+    ///
+    /// Meta message(s) describe short format extra details about the parameter.
+    /// We recommend non-sentence information for this field.
+    ///
+    /// See also:
+    /// * [`Parameter::help`]
+    /// * [`Parameter::choice`]
+    ///
+    /// ### Example
+    /// ```
+    /// # use blarg_builder as blarg;
+    /// use blarg::{Parameter, Scalar};
+    ///
+    /// let mut verbose: bool = false;
+    /// Parameter::argument(Scalar::new(&mut verbose), "verbose")
+    ///     .meta(vec!["--this will be discarded--"])
+    ///     .meta(vec!["final extra", "details"]);
+    /// ```
+    pub fn meta(self, descriptions: Vec<impl Into<String>>) -> Self {
+        let mut inner = self.0;
+        inner.meta = Some(descriptions.into_iter().map(|s| s.into()).collect());
         Self(inner)
     }
 
@@ -395,13 +469,17 @@ impl<'a, T> Parameter<'a, T> {
 }
 
 impl<'a, T: std::fmt::Display> Choices<T> for Parameter<'a, T> {
-    /// Document a choice in the help message for this parameter.
+    /// Document a choice for this parameter.
     /// If repeated for the same `variant` of `T`, only the final message will apply to the parameter.
     /// Repeat using different variants to document multiple choices.
     /// Needn't be exhaustive.
     ///
     /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
     /// To limit the parser semantics, be sure to use an enum.
+    ///
+    /// See also:
+    /// * [`Parameter::help`]
+    /// * [`Parameter::meta`]
     ///
     /// ### Example
     /// ```
@@ -437,7 +515,8 @@ mod tests {
         assert_eq!(option.class, ParameterClass::Opt);
         assert_eq!(option.name, "flag");
         assert_eq!(option.short, None);
-        assert_eq!(option.description, None);
+        assert_eq!(option.help, None);
+        assert_eq!(option.meta, None);
         assert_eq!(option.choices, HashMap::default());
     }
 
@@ -449,7 +528,8 @@ mod tests {
         assert_eq!(option.class, ParameterClass::Opt);
         assert_eq!(option.name, "flag");
         assert_eq!(option.short, Some('f'));
-        assert_eq!(option.description, None);
+        assert_eq!(option.help, None);
+        assert_eq!(option.meta, None);
         assert_eq!(option.choices, HashMap::default());
     }
 
@@ -463,7 +543,23 @@ mod tests {
         assert_eq!(option.class, ParameterClass::Opt);
         assert_eq!(option.name, "flag".to_string());
         assert_eq!(option.short, None);
-        assert_eq!(option.description, Some("help message".to_string()));
+        assert_eq!(option.help, Some("help message".to_string()));
+        assert_eq!(option.meta, None);
+        assert_eq!(option.choices, HashMap::default());
+    }
+
+    #[test]
+    fn option_meta() {
+        let mut flag: bool = false;
+        let option = Parameter::option(Switch::new(&mut flag, true), "flag", None)
+            .meta(vec!["meta message"])
+            .consume();
+
+        assert_eq!(option.class, ParameterClass::Opt);
+        assert_eq!(option.name, "flag".to_string());
+        assert_eq!(option.short, None);
+        assert_eq!(option.help, None);
+        assert_eq!(option.meta, Some(vec!["meta message".to_string()]));
         assert_eq!(option.choices, HashMap::default());
     }
 
@@ -479,7 +575,8 @@ mod tests {
         assert_eq!(option.class, ParameterClass::Opt);
         assert_eq!(option.name, "flag".to_string());
         assert_eq!(option.short, None);
-        assert_eq!(option.description, None);
+        assert_eq!(option.help, None);
+        assert_eq!(option.meta, None);
         assert_eq!(
             option.choices,
             HashMap::from([
@@ -497,7 +594,8 @@ mod tests {
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, None);
+        assert_eq!(argument.help, None);
+        assert_eq!(argument.meta, None);
         assert_eq!(argument.choices, HashMap::default());
     }
 
@@ -511,7 +609,23 @@ mod tests {
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, Some("help message".to_string()));
+        assert_eq!(argument.help, Some("help message".to_string()));
+        assert_eq!(argument.meta, None);
+        assert_eq!(argument.choices, HashMap::default());
+    }
+
+    #[test]
+    fn argument_meta() {
+        let mut item: bool = false;
+        let argument = Parameter::argument(Scalar::new(&mut item), "item")
+            .meta(vec!["meta message"])
+            .consume();
+
+        assert_eq!(argument.class, ParameterClass::Arg);
+        assert_eq!(argument.name, "item".to_string());
+        assert_eq!(argument.short, None);
+        assert_eq!(argument.help, None);
+        assert_eq!(argument.meta, Some(vec!["meta message".to_string()]));
         assert_eq!(argument.choices, HashMap::default());
     }
 
@@ -523,12 +637,14 @@ mod tests {
             .choice(false, "d")
             .choice(true, "e")
             .help("help")
+            .meta(vec!["meta"])
             .consume();
 
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, Some("help".to_string()));
+        assert_eq!(argument.help, Some("help".to_string()));
+        assert_eq!(argument.meta, Some(vec!["meta".to_string()]));
         assert_eq!(
             argument.choices,
             HashMap::from([
@@ -546,13 +662,15 @@ mod tests {
             .choice(false, "d")
             .choice(true, "e")
             .help("help")
+            .meta(vec!["meta"])
             .consume();
         let argument = condition.consume();
 
         assert_eq!(argument.class, ParameterClass::Arg);
         assert_eq!(argument.name, "item".to_string());
         assert_eq!(argument.short, None);
-        assert_eq!(argument.description, Some("help".to_string()));
+        assert_eq!(argument.help, Some("help".to_string()));
+        assert_eq!(argument.meta, Some(vec!["meta".to_string()]));
         assert_eq!(
             argument.choices,
             HashMap::from([

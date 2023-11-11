@@ -1,19 +1,246 @@
 use crate::parser::base::ParseError;
 use crate::parser::ErrorContext;
 
+#[derive(Debug)]
+pub(crate) struct PaddingWidth(usize);
+
+impl PaddingWidth {
+    pub(crate) fn new(width: usize) -> Result<Self, ()> {
+        // padding must be at least 1
+        if width >= 1 {
+            Ok(PaddingWidth(width))
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct LeftWidth(usize);
+
+impl LeftWidth {
+    pub(crate) fn new(width: usize) -> Result<Self, ()> {
+        // left must be at least 1
+        if width >= 1 {
+            Ok(LeftWidth(width))
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct MiddleWidth(usize);
+
+impl MiddleWidth {
+    pub(crate) fn new(width: usize) -> Result<Self, ()> {
+        // middle must be at least 2 (so we can hyphenate)
+        if width >= 2 {
+            Ok(MiddleWidth(width))
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RightWidth(usize);
+
+impl RightWidth {
+    pub(crate) fn new(width: usize) -> Result<Self, ()> {
+        // right must be at least 1
+        if width >= 1 {
+            Ok(RightWidth(width))
+        } else {
+            Err(())
+        }
+    }
+
+    pub(crate) fn value(&self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct TotalWidth(pub usize);
+
+#[derive(Debug)]
+pub(crate) struct ColumnRenderer {
+    padding: PaddingWidth,
+    left: LeftWidth,
+    middle: MiddleWidth,
+    rights: Vec<RightWidth>,
+}
+
+impl ColumnRenderer {
+    /// Produce a renderer based off the provided widths.
+    /// This renderer will use a simple heuristic to chose the middle width.
+    /// If the widths {left, heuristic(middle), rights, appropriate(padding)} do not fit within the total, then a `None` is returned.
+    pub(crate) fn guided(
+        padding: PaddingWidth,
+        left: LeftWidth,
+        middle: MiddleWidth,
+        rights: Vec<RightWidth>,
+        total_width: TotalWidth,
+    ) -> Option<Self> {
+        // We always have a left and a middle (and a padding between them).
+        let mut non_middle: usize = &left.0 + &padding.0;
+
+        if !rights.is_empty() {
+            non_middle += &padding.0
+                + rights.iter().map(|r| r.0).sum::<usize>()
+                + ((rights.len() - 1) * &padding.0);
+        }
+
+        let guided_middle = std::cmp::min(middle.0, ((non_middle as f64) * 2.5) as usize);
+
+        if guided_middle + non_middle <= total_width.0 {
+            Some(Self::new(padding, left, MiddleWidth(guided_middle), rights))
+        } else {
+            None
+        }
+    }
+
+    /// Produce a renderer based off the provided widths.
+    pub(crate) fn new(
+        padding: PaddingWidth,
+        left: LeftWidth,
+        middle: MiddleWidth,
+        rights: Vec<RightWidth>,
+    ) -> Self {
+        Self {
+            padding,
+            left,
+            middle,
+            rights,
+        }
+    }
+
+    pub(crate) fn render(
+        &self,
+        indent: usize,
+        left: &str,
+        middle: &str,
+        rights: &Vec<String>,
+    ) -> Vec<String> {
+        assert!(rights.len() <= self.rights.len());
+        let padding = &self.padding.0;
+        let padding = format!("{:padding$}", "");
+        let mut right = String::default();
+
+        if !rights.is_empty() {
+            right = padding.clone();
+
+            for (i, item) in rights.iter().enumerate() {
+                let width = &self.rights[i].0;
+                assert!(item.len() <= *width);
+
+                if &i + 1 < rights.len() {
+                    right.push_str(format!("{:width$}{padding}", item).as_str());
+                } else {
+                    if &item.len() < width {
+                        right.push_str(format!("{}", item).as_str());
+                    } else {
+                        right.push_str(format!("{:width$}", item).as_str());
+                    }
+                }
+            }
+        }
+
+        let left_column_width = &self.left.0;
+        assert!(&left.len() <= left_column_width);
+        let middle_column_width = &self.middle.0 - indent;
+        let middle_parts = chunk(middle, middle_column_width);
+        let mut out = Vec::default();
+
+        for (i, part) in middle_parts.iter().enumerate() {
+            if i == 0 {
+                if right.is_empty() {
+                    out.push(format!(
+                        "{:indent$}{:left_column_width$}{padding}{}",
+                        "", left, part
+                    ));
+                } else {
+                    assert!(&part.len() <= &middle_column_width);
+                    out.push(format!(
+                        "{:indent$}{:left_column_width$}{padding}{:middle_column_width$}{right}",
+                        "", left, part
+                    ));
+                }
+            } else {
+                out.push(format!(
+                    "{:indent$}{:left_column_width$}{padding}{}",
+                    "", "", part
+                ));
+            }
+        }
+
+        if out.is_empty() {
+            assert!(middle_parts.is_empty());
+            if right.is_empty() {
+                out.push(format!("{:indent$}{:left_column_width$}", "", left));
+            } else {
+                out.push(format!(
+                    "{:indent$}{:left_column_width$}{padding}{:middle_column_width$}{right}",
+                    "", left, ""
+                ));
+            }
+        }
+
+        out
+    }
+}
+
+fn chunk(paragraph: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::default();
+    let mut current = String::default();
+
+    for word in paragraph.split(' ') {
+        if !word.is_empty() {
+            if current.is_empty() {
+                hyphenate(width, &mut lines, &mut current, word);
+            } else {
+                if current.len() + word.len() + 1 <= width {
+                    current.push(' ');
+                    current.push_str(word);
+                } else {
+                    lines.push(current);
+                    current = String::default();
+                    hyphenate(width, &mut lines, &mut current, word);
+                }
+            }
+        }
+    }
+
+    if !current.is_empty() {
+        lines.push(current);
+    }
+
+    lines
+}
+
+fn hyphenate(width: usize, lines: &mut Vec<String>, current: &mut String, word: &str) {
+    let increment = width - 1;
+    let mut left = 0;
+    let mut right = increment.clone();
+
+    while &right + 1 < word.len() {
+        lines.push(format!("{}-", &word[left..right]));
+        left += &increment;
+        right += &increment;
+    }
+
+    current.push_str(&word[left..]);
+}
+
 pub(crate) trait UserInterface {
     fn print(&self, message: String);
     fn print_error(&self, error: ParseError);
     fn print_error_context(&self, error_context: ErrorContext);
 }
 
+#[derive(Default)]
 pub(crate) struct ConsoleInterface {}
-
-impl Default for ConsoleInterface {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl UserInterface for ConsoleInterface {
     fn print(&self, message: String) {
@@ -191,5 +418,443 @@ pub(crate) mod util {
         } else {
             Some(values.join("\n"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_renderer_simple() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(23).unwrap(),
+            vec![],
+        );
+
+        assert_eq!(
+            cr.render(0, "abc", "something", &vec![]),
+            vec!["abc      something".to_string()]
+        );
+        assert_eq!(
+            cr.render(0, "abc", "  something  ", &vec![]),
+            vec!["abc      something".to_string()]
+        );
+
+        assert_eq!(
+            cr.render(0, "abc12", "something pieces full", &vec![]),
+            vec!["abc12    something pieces full".to_string()]
+        );
+        assert_eq!(
+            cr.render(0, "abc", "something pieces full more stuff", &vec![]),
+            vec![
+                "abc      something pieces full".to_string(),
+                "         more stuff".to_string(),
+            ]
+        );
+
+        assert_eq!(
+            cr.render(0, "abc", "something pieces fully more stuff", &vec![]),
+            vec![
+                "abc      something pieces fully".to_string(),
+                "         more stuff".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(0, "abc", "something pieces fuller more stuff", &vec![]),
+            vec![
+                "abc      something pieces fuller".to_string(),
+                "         more stuff".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "something pieces fullest more stuff extra     ",
+                &vec![]
+            ),
+            vec![
+                "abc      something pieces".to_string(),
+                "         fullest more stuff".to_string(),
+                "         extra".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn column_renderer() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![
+                RightWidth::new(5).unwrap(),
+                RightWidth::new(2).unwrap(),
+                RightWidth::new(5).unwrap(),
+            ],
+        );
+
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "my stuff",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec!["abc      my stuff    a        b     c".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "my stuff",
+                &vec!["a".to_string(), "".to_string(), "c".to_string()]
+            ),
+            vec!["abc      my stuff    a              c".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc12",
+                "my stuff",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec!["abc12    my stuff    abcde    bc    cdefg".to_string()]
+        );
+
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "my stuff and some",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec![
+                "abc      my stuff    a        b     c".to_string(),
+                "         and some".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "my stuff and some",
+                &vec!["a".to_string(), "".to_string(), "c".to_string()]
+            ),
+            vec![
+                "abc      my stuff    a              c".to_string(),
+                "         and some".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc12",
+                "my stuff and some",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec![
+                "abc12    my stuff    abcde    bc    cdefg".to_string(),
+                "         and some".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn column_renderer_middle_overflow() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(23).unwrap(),
+            vec![],
+        );
+
+        assert_eq!(
+            cr.render(0, "abc", "somethingxpiecesxfuller", &vec![]),
+            vec!["abc      somethingxpiecesxfuller".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "somethingxpiecesxfullerandthenwecontinueforalongtime",
+                &vec![]
+            ),
+            vec![
+                "abc      somethingxpiecesxfulle-".to_string(),
+                "         randthenwecontinuefora-".to_string(),
+                "         longtime".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "somethingxpiecesxfullerandthenwecontinueforalongtimeuntildonexxxxxx",
+                &vec![]
+            ),
+            vec![
+                "abc      somethingxpiecesxfulle-".to_string(),
+                "         randthenwecontinuefora-".to_string(),
+                "         longtimeuntildonexxxxxx".to_string(),
+            ]
+        );
+
+        assert_eq!(
+            cr.render(0, "abc", "something pieces fuller", &vec![]),
+            vec!["abc      something pieces fuller".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "something pieces fullerandthenwecontinueforalongtime",
+                &vec![]
+            ),
+            vec![
+                "abc      something pieces".to_string(),
+                "         fullerandthenwecontinu-".to_string(),
+                "         eforalongtime".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn column_renderer_middle_empty() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![
+                RightWidth::new(5).unwrap(),
+                RightWidth::new(2).unwrap(),
+                RightWidth::new(5).unwrap(),
+            ],
+        );
+
+        // TODO: Fix the trailing whitespace on this one.
+        assert_eq!(cr.render(0, "abc", "", &vec![]), vec!["abc  ".to_string()]);
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec!["abc                  a        b     c".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc",
+                "",
+                &vec!["a".to_string(), "".to_string(), "c".to_string()]
+            ),
+            vec!["abc                  a              c".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                0,
+                "abc12",
+                "",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec!["abc12                abcde    bc    cdefg".to_string()]
+        );
+    }
+
+    #[test]
+    fn column_renderer_indent() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(10).unwrap(),
+            vec![
+                RightWidth::new(5).unwrap(),
+                RightWidth::new(2).unwrap(),
+                RightWidth::new(5).unwrap(),
+            ],
+        );
+
+        assert_eq!(
+            cr.render(1, "abc", "something", &vec![]),
+            vec![" abc      something".to_string()]
+        );
+        assert_eq!(
+            cr.render(1, "abc", "somethingx", &vec![]),
+            vec![
+                " abc      somethin-".to_string(),
+                "          gx".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(2, "abc", "somethin", &vec![]),
+            vec!["  abc      somethin".to_string()]
+        );
+
+        assert_eq!(
+            cr.render(
+                1,
+                "abc",
+                "something",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec![" abc      something    a        b     c".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                1,
+                "abc",
+                "somethingx",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec![
+                " abc      somethin-    a        b     c".to_string(),
+                "          gx".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                2,
+                "abc",
+                "somethi",
+                &vec!["a".to_string(), "b".to_string(), "c".to_string()]
+            ),
+            vec!["  abc      somethi     a        b     c".to_string(),]
+        );
+
+        assert_eq!(
+            cr.render(
+                1,
+                "abc12",
+                "something",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec![" abc12    something    abcde    bc    cdefg".to_string()]
+        );
+        assert_eq!(
+            cr.render(
+                1,
+                "abc12",
+                "somethingx",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec![
+                " abc12    somethin-    abcde    bc    cdefg".to_string(),
+                "          gx".to_string(),
+            ]
+        );
+        assert_eq!(
+            cr.render(
+                2,
+                "abc12",
+                "somethin",
+                &vec!["abcde".to_string(), "bc".to_string(), "cdefg".to_string()]
+            ),
+            vec!["  abc12    somethin    abcde    bc    cdefg".to_string()]
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn column_renderer_left_overflow() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(10).unwrap(),
+            vec![],
+        );
+        cr.render(0, "abcdef", "something", &vec![]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn column_renderer_right_overflow() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(10).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+        );
+        cr.render(0, "abcdef", "something", &vec!["ab".to_string()]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn column_renderer_right_too_many() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(10).unwrap(),
+            vec![RightWidth::new(5).unwrap()],
+        );
+        cr.render(
+            0,
+            "abcdef",
+            "something",
+            &vec!["ab".to_string(), "cd".to_string()],
+        );
+    }
+
+    #[test]
+    fn column_renderer_guided() {
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(2).unwrap(),
+            vec![],
+            TotalWidth(15),
+        )
+        .unwrap();
+        assert_eq!(cr.middle.0, 2);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![],
+            TotalWidth(15),
+        )
+        .unwrap();
+        assert_eq!(cr.middle.0, 8);
+        let optional = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![],
+            TotalWidth(14),
+        );
+        assert!(optional.is_none());
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(2).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(18),
+        )
+        .unwrap();
+        assert_eq!(cr.middle.0, 2);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(18),
+        )
+        .unwrap();
+        assert_eq!(cr.middle.0, 8);
+        let optional = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(8).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(17),
+        );
+        assert!(optional.is_none());
     }
 }

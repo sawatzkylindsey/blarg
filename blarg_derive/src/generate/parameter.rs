@@ -133,7 +133,9 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#choices(#parameter.help(format!("{} (initial: {})", #help, #field_default))));
+                            clp = clp.add(#choices(#parameter
+                                .help(#help)
+                                .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
                             #after_lines
                         }
                     }
@@ -142,7 +144,8 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#choices(#parameter.help(format!("(initial: {})", #field_default))));
+                            clp = clp.add(#choices(#parameter
+                                .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
                             #after_lines
                         }
                     }
@@ -151,7 +154,9 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#parameter.help(format!("{} (type: {}, initial: {})", #help, #from_str_type, #field_default)));
+                            clp = clp.add(#parameter
+                                .help(#help)
+                                .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
                             #after_lines
                         }
                     }
@@ -159,7 +164,8 @@ impl DeriveParameter {
                         quote! {
                             #before_lines
                             #default
-                            clp = clp.add(#parameter.help(format!("(type: {}, initial: {})", #from_str_type, #field_default)));
+                            clp = clp.add(#parameter
+                                .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
                             #after_lines
                         }
                     }
@@ -177,9 +183,11 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#choices(#parameter
-                                    .help(format!("{} (initial: {})", #help, #field_default))));
+                                    .help(#help)
+                                    .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
                             } else {
-                                clp = clp.add(#choices(#parameter.help(#help)));
+                                clp = clp.add(#choices(#parameter
+                                    .help(#help)));
                             }
                             #after_lines
                         }
@@ -191,7 +199,7 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#choices(#parameter
-                                    .help(format!("(initial: {})", #field_default))));
+                                    .meta(vec!["".to_string(), format!("initial: {}", #field_default)])));
                             } else {
                                 clp = clp.add(#choices(#parameter));
                             }
@@ -205,9 +213,12 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#parameter
-                                    .help(format!("{} (type: {}, initial: {})", #help, #from_str_type, #field_default)));
+                                    .help(#help)
+                                    .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
                             } else {
-                                clp = clp.add(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
+                                clp = clp.add(#parameter
+                                    .help(#help)
+                                    .meta(vec![format!("type: {}", #from_str_type)]));
                             }
                             #after_lines
                         }
@@ -218,10 +229,10 @@ impl DeriveParameter {
                             if let Some(inner) = #parent.#field_name.as_ref() {
                                 let #field_default = format!("{inner}");
                                 clp = clp.add(#parameter
-                                    .help(format!("(type: {}, initial: {})", #from_str_type, #field_default)));
+                                    .meta(vec![format!("type: {}", #from_str_type), format!("initial: {}", #field_default)]));
                             } else {
                                 clp = clp.add(#parameter
-                                    .help(format!("(type: {})", #from_str_type)));
+                                    .meta(vec![format!("type: {}", #from_str_type)]));
                             }
                             #after_lines
                         }
@@ -234,7 +245,8 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        let mut clp = clp.branch(#choices(#parameter.help(#help)));
+                        let mut clp = clp.branch(#choices(#parameter
+                            .help(#help)));
                         #after_lines
                     }
                 }
@@ -250,14 +262,17 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        let mut clp = clp.branch(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
+                        let mut clp = clp.branch(#parameter
+                            .help(#help)
+                            .meta(vec![format!("type: {}", #from_str_type)]));
                         #after_lines
                     }
                 }
                 (None, None) => {
                     quote! {
                         #before_lines
-                        let mut clp = clp.branch(#parameter.help(format!("(type: {})", #from_str_type)));
+                        let mut clp = clp.branch(#parameter
+                            .meta(vec![format!("type: {}", #from_str_type)]));
                         #after_lines
                     }
                 }
@@ -268,7 +283,8 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        clp = clp.add(#choices(#parameter.help(#help)));
+                        clp = clp.add(#choices(#parameter
+                            .help(#help)));
                         #after_lines
                     }
                 }
@@ -284,7 +300,8 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        clp = clp.add(#parameter.help(#help));
+                        clp = clp.add(#parameter
+                            .help(#help));
                         #after_lines
                     }
                 }
@@ -302,7 +319,8 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        clp = clp.add(#choices(#parameter.help(#help)));
+                        clp = clp.add(#choices(#parameter
+                            .help(#help)));
                         #after_lines
                     }
                 }
@@ -318,14 +336,17 @@ impl DeriveParameter {
                     let help = help.tokens;
                     quote! {
                         #before_lines
-                        clp = clp.add(#parameter.help(format!("{} (type: {})", #help, #from_str_type)));
+                        clp = clp.add(#parameter
+                            .help(#help)
+                            .meta(vec![format!("type: {}", #from_str_type)]));
                         #after_lines
                     }
                 }
                 (None, None) => {
                     quote! {
                         #before_lines
-                        clp = clp.add(#parameter.help(format!("(type: {})", #from_str_type)));
+                        clp = clp.add(#parameter
+                            .meta(vec![format!("type: {}", #from_str_type)]));
                         #after_lines
                     }
                 }
@@ -372,9 +393,9 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help (format ! ("(type: {
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
 "#
         );
     }
@@ -460,11 +481,9 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help (format ! ("{
+            r#"clp = clp . add (Parameter :: argument (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my_field") . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
-}
-)" , "abc 123" , "usize"))) ;
+" , "usize")])) ;
 "#
         );
     }
@@ -486,9 +505,9 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("(type: {
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
 "#
         );
     }
@@ -562,11 +581,9 @@ mod tests {
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("{
+            r#"clp = clp . add (Parameter :: argument (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
-}
-)" , "abc 123" , "usize"))) ;
+" , "usize")])) ;
 "#
         );
     }
@@ -596,11 +613,11 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -632,9 +649,9 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("(initial: {
+ clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
-)" , my_field_default)))) ;
+" , my_field_default)]))) ;
 "#
         );
     }
@@ -668,11 +685,9 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help ("abc 123") . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
- (initial: {
-}
-)" , "abc 123" , my_field_default)))) ;
+" , my_field_default)]))) ;
 "#
         );
     }
@@ -704,13 +719,11 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , None) . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
+" , "usize") , format ! ("initial: {
 }
-, initial: {
-}
-)" , "abc 123" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -742,11 +755,11 @@ mod tests {
             r#"let my_field_default = format ! ("{
 :?}
 " , target . my_field) ;
- clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m')) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Collection :: new (& mut target . my_field , Nargs :: AtLeastOne) , "my-field" , Some ('m')) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -772,16 +785,16 @@ mod tests {
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
  }
 "#
         );
@@ -810,9 +823,9 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(initial: {
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
-)" , my_field_default)))) ;
+" , my_field_default)]))) ;
  }
  else {
  clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None))) ;
@@ -845,11 +858,9 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123") . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
- (initial: {
-}
-)" , "abc 123" , my_field_default)))) ;
+" , my_field_default)]))) ;
  }
  else {
  clp = clp . add (my_func (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123"))) ;
@@ -881,20 +892,16 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
+" , "usize") , format ! ("initial: {
 }
-, initial: {
-}
-)" , "abc 123" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
-}
-)" , "abc 123" , "usize"))) ;
+" , "usize")])) ;
  }
 "#
         );
@@ -925,16 +932,16 @@ inner}
  let my_field_default = format ! ("{
 inner}
 ") ;
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
  }
  else {
- clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Optional :: new (& mut target . my_field) , "my-field" , Some ('m')) . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
  }
 "#
         );
@@ -958,11 +965,11 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -987,9 +994,9 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("(initial: {
+ clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
-)" , my_field_default)))) ;
+" , my_field_default)]))) ;
 "#
         );
     }
@@ -1016,11 +1023,9 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (my_func (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123") . meta (vec ! ["" . to_string () , format ! ("initial: {
 }
- (initial: {
-}
-)" , "abc 123" , my_field_default)))) ;
+" , my_field_default)]))) ;
 "#
         );
     }
@@ -1045,13 +1050,11 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help (format ! ("{
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , None) . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
+" , "usize") , format ! ("initial: {
 }
-, initial: {
-}
-)" , "abc 123" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -1078,11 +1081,11 @@ inner}
         assert_eq!(
             simple_format(token_stream.to_string()),
             r#"let my_field_default = target . my_field . to_string () ;
- clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m')) . help (format ! ("(type: {
+ clp = clp . add (Parameter :: option (Scalar :: new (& mut target . my_field) , "my-field" , Some ('m')) . meta (vec ! [format ! ("type: {
 }
-, initial: {
+" , "usize") , format ! ("initial: {
 }
-)" , "usize" , my_field_default))) ;
+" , my_field_default)])) ;
 "#
         );
     }
@@ -1246,9 +1249,9 @@ inner}
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("(type: {
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "MyEnum"))) ;
+" , "MyEnum")])) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
 "#
@@ -1385,11 +1388,9 @@ inner}
         // Verify
         assert_eq!(
             simple_format(token_stream.to_string()),
-            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help (format ! ("{
+            r#"let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut target . my_field) , "my_field") . help ("abc 123") . meta (vec ! [format ! ("type: {
 }
- (type: {
-}
-)" , "abc 123" , "MyEnum"))) ;
+" , "MyEnum")])) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
 "#

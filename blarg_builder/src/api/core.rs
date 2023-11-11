@@ -143,7 +143,7 @@ impl<'a> CommandLineParser<'a> {
         )?;
         let command = ParseUnit::new(
             parser,
-            Printer::new(self.option_parameters, self.argument_parameters),
+            Printer::terminal(self.option_parameters, self.argument_parameters),
         );
         Ok(GeneralParser::command(
             self.program,
@@ -224,7 +224,7 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
             let sub_parser = Parser::new(cp.option_captures, cp.argument_captures, None)?;
             let sub_command = ParseUnit::new(
                 sub_parser,
-                Printer::new(cp.option_parameters, cp.argument_parameters),
+                Printer::terminal(cp.option_parameters, cp.argument_parameters),
             );
             sub_commands.insert(discriminee, sub_command);
         }
@@ -236,7 +236,7 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
         )?;
         let command = ParseUnit::new(
             parser,
-            Printer::new(self.root.option_parameters, self.root.argument_parameters),
+            Printer::terminal(self.root.option_parameters, self.root.argument_parameters),
         );
         Ok(GeneralParser::sub_command(
             self.root.program,
@@ -597,9 +597,9 @@ mod tests {
 
         let message = receiver.consume_message();
         assert_contains!(message, "usage: program [-h] [-f] SUB\n");
-        assert_contains!(message, "SUB         {0, 1}");
-        assert_contains!(message, "0           zero");
-        assert_contains!(message, "1           one");
+        assert_contains!(message, "SUB          {0, 1}");
+        assert_contains!(message, "0            zero");
+        assert_contains!(message, "1            one");
         assert_contains!(message, "-f, --flag");
     }
 

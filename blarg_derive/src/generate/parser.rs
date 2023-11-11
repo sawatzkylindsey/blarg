@@ -176,9 +176,9 @@ mod tests {
  fn blarg_parse () -> my_struct {
  let mut my_struct_target = < my_struct > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
  parser . parse () ;
  my_struct_target }
@@ -238,9 +238,9 @@ mod tests {
  let mut Abc_target = < Abc > :: default () ;
  let mut Def_target = < Def > :: default () ;
  let mut clp = CommandLineParser :: new ("abc") ;
- let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+ let mut clp = clp . branch (Condition :: new (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
  clp = clp . command (0 , Abc :: setup_command (& mut Abc_target)) ;
  clp = clp . command (1 , Def :: setup_command (& mut Def_target)) ;
  let parser = clp . build () . expect ("Invalid CommandLineParser configuration") ;
@@ -296,9 +296,9 @@ mod tests {
             r#"impl my_struct {
  fn setup_command < 'a > (my_struct_target : & 'a mut my_struct) -> impl FnOnce (SubCommand < 'a >) -> SubCommand < 'a > {
  | mut clp | {
- clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . help (format ! ("(type: {
+ clp = clp . add (Parameter :: argument (Scalar :: new (& mut my_struct_target . my_field) , "my_field") . meta (vec ! [format ! ("type: {
 }
-)" , "usize"))) ;
+" , "usize")])) ;
  clp }
  }
  }

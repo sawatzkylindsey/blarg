@@ -29,7 +29,7 @@
 //! * ~Derive macro support.~
 //! * ~Automatic choice documentation.~
 //! * ~Default/initial value documentation.~
-//! * Help message formatting, such as line wrapping.
+//! * ~Help message formatting, such as line wrapping.~
 //! * Fallible `Collectable`s.
 //!
 //! # Usage

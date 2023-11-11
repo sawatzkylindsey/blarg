@@ -66,9 +66,10 @@ fn main() {
         )
         .branch(
             Condition::new(Scalar::new(&mut foo_bar), "foo_bar")
-                .choice(FooBar::Foo, "abc 123")
-                .choice(FooBar::Bar, "abc 123")
-                .help("foo'y bar'y stuff"),
+                .choice(FooBar::Foo, "123 abc let's make this one medium long.")
+                .choice(FooBar::Bar, "456 def let's make this one multiple sentences.  We're really stretching here HAAAAAAAA HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA!")
+                .help("foo'y bar'y stuff")
+                .meta(vec!["a", "b", "c"]),
         )
         .command(FooBar::Foo, |sub| {
             sub.add(Parameter::option(

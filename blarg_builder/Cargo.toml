@@ -9,6 +9,7 @@ unit_test = []
 
 [dependencies]
 thiserror = "^1.0"
+terminal_size = "^0.3.0"
 
 [dev-dependencies]
 assert_matches = "1.5"
