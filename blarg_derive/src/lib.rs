@@ -1,3 +1,5 @@
+//! Derive module for `blarg`.
+//! See [documentation root](https://docs.rs/blarg/latest/blarg/index.html) for full details.
 extern crate proc_macro;
 
 mod generate;

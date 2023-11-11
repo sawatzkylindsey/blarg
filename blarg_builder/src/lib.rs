@@ -1,5 +1,5 @@
-//! Core builder module for `blarg`.
-//! See documentation root for more details.
+//! Builder module for `blarg`.
+//! See [documentation root](https://docs.rs/blarg/latest/blarg/index.html) for full details.
 #![deny(missing_docs)]
 mod api;
 mod constant;

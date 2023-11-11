@@ -1,8 +1,12 @@
 [package]
 name = "blarg_derive"
+keywords = ["argument", "cli", "arg", "parser", "parse"]
+categories = ["command-line-interface"]
+description = "A type-safe, domain sensitive, argument/option paradigm command line parser."
 license.workspace = true
 version.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [lib]
 proc-macro = true

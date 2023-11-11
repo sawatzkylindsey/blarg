@@ -1,8 +1,12 @@
 [package]
 name = "blarg_builder"
+keywords = ["argument", "cli", "arg", "parser", "parse"]
+categories = ["command-line-interface"]
+description = "A type-safe, domain sensitive, argument/option paradigm command line parser."
 license.workspace = true
 version.workspace = true
 edition.workspace = true
+repository.workspace = true
 
 [features]
 unit_test = []
