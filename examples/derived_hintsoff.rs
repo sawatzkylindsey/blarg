@@ -3,7 +3,6 @@ use blarg::{
     derive::*, prelude::*, Collection, CommandLineParser, Nargs, Optional, Parameter, Scalar,
     Switch,
 };
-use std::fmt::Formatter;
 
 #[derive(Debug, Default, BlargParser)]
 #[blarg(hints_off)]
@@ -33,7 +32,7 @@ struct Pair<T: std::fmt::Debug> {
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Pair<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let l: String = self
             .left
             .as_ref()

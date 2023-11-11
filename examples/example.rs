@@ -9,7 +9,7 @@ fn main() {
             "verbose",
             Some('v'),
         ))
-        .add(Parameter::argument(Scalar::new(&mut value), "value"))
+        .add(Parameter::argument(Scalar::new(&mut value), "value").meta(vec!["type: u32"]))
         .build()
         .expect("Invalid argument parser configuration");
     parser.parse();

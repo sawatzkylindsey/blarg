@@ -1,15 +1,15 @@
 # blarg
 `blarg` is a command line argument parser for Rust.
-In brief, it provides type-safe, domain sensitive, argument-option paradigm command line parser functionality.
+In brief, it provides type-safe, domain sensitive, argument/option paradigm command line parser functionality.
 Check out the rustdoc for more information.
 
 "blarg" is derived from the following:
 * **arg** for argument parser.
-* **bl**arg because all the other names are already taken.
+* **bl**arg because all the other names are already taken 🤪.
 
 ### Derive Example
 
-    use blarg::{BlargParser, CommandLineParser, Parameter, Scalar, Switch};
+    use blarg::{derive::*, CommandLineParser, Parameter, Scalar, Switch};
     
     #[derive(Debug, Default, BlargParser)]
     #[blarg(program = "example")]
@@ -20,7 +20,7 @@ Check out the rustdoc for more information.
     }
     
     fn main() {
-        let parameters = Parameters::parse();
+        let parameters = Parameters::blarg_parse();
         println!(
             "value: {}, verbose: {}",
             parameters.value, parameters.verbose
@@ -31,7 +31,7 @@ Check out the rustdoc for more information.
     usage: example [-h] [-v] VALUE
     
     positional arguments:
-     VALUE
+     VALUE                                              type: u32
     
     options:
      -h, --help     Show this help message and exit.
@@ -51,7 +51,7 @@ Check out the rustdoc for more information.
                 "verbose",
                 Some('v'),
             ))
-            .add(Parameter::argument(Scalar::new(&mut value), "value"))
+            .add(Parameter::argument(Scalar::new(&mut value), "value").meta(vec!["type: u32"]))
             .build()
             .expect("Invalid argument parser configuration");
         parser.parse();
