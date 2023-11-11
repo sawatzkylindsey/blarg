@@ -143,7 +143,7 @@ impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentParameter {
 }
 
 /// The condition argument with which to branch the parser.
-/// Used with `CommandParser::branch`.
+/// Used with [`CommandLineParser::branch`](./struct.CommandLineParser.html#method.branch).
 ///
 /// There is an implicit (non-compile time) requirement for the type `T` of a `Condition`:
 /// > The implementations of `std::fmt::Display` and `std::str::FromStr` must form an inverse relationship.
@@ -300,8 +300,8 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, 
     /// A choice help message describes the variant in full sentence/paragraph format.
     /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
     ///
-    /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
-    /// To limit the parser semantics, be sure to use an enum.
+    /// Notice, the documented or un-documented choices *do not* affect the actual command parser semantics.
+    /// To actually limit the command parser semantics, be sure to use an enum.
     ///
     /// See also:
     /// * [`Condition::help`]
@@ -350,8 +350,8 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, 
     }
 }
 
-/// An argument/option for the `CommandParser`.
-/// Used with `CommandParser::add` and `SubCommandParser::add`.
+/// An argument/option for the command parser.
+/// Used with [`CommandLineParser::add`](./struct.CommandLineParser.html#method.add) and [`SubCommand::add`](./struct.SubCommand.html#method.add).
 pub struct Parameter<'a, T>(ParameterInner<'a, T>);
 
 impl<'a, T> Parameter<'a, T> {
@@ -480,8 +480,8 @@ impl<'a, T: std::fmt::Display> Choices<T> for Parameter<'a, T> {
     /// A choice help message describes the variant in full sentence/paragraph format.
     /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
     ///
-    /// Notice, the documented or un-documented choices *do not* affect the command parser semantics.
-    /// To limit the parser semantics, be sure to use an enum.
+    /// Notice, the documented or un-documented choices *do not* affect the actual command parser semantics.
+    /// To actually limit the command parser semantics, be sure to use an enum.
     ///
     /// See also:
     /// * [`Parameter::help`]

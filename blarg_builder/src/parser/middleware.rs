@@ -7,7 +7,7 @@ use crate::parser::printer::Printer;
 use crate::parser::ErrorContext;
 
 /// The configured command line parser.
-/// Built via `CommandLineParser::build` or `SubCommandParser::build`.
+/// Built via [`CommandLineParser::build`](./struct.CommandLineParser.html#method.build) or [`SubCommandParser::build`](./struct.SubCommandParser.html#method.build).
 pub struct GeneralParser<'a> {
     program: String,
     command: ParseUnit<'a>,
@@ -108,7 +108,7 @@ enum ParseResult {
 impl<'a> GeneralParser<'a> {
     /// Run the command line parser against the input tokens.
     ///
-    /// The parser will process the input tokens based off the `CommandLineParser` configuration.
+    /// The parser will process the input tokens based off the [`CommandLineParser`](./struct.CommandLineParser.html)/[`SubCommandParser`](./struct.SubCommandParser.html) configuration.
     /// Parsing happens in two phases:
     /// 1. Token matching aligns the tokens to arguments and options.
     /// All tokens must be matched successfully in order to proceed to the next phase.
@@ -188,14 +188,14 @@ impl<'a> GeneralParser<'a> {
 
     /// Run the command line parser against the Cli [`env::args`].
     ///
-    /// The parser will process the input tokens based off the `CommandLineParser` configuration.
+    /// The parser will process the input tokens based off the [`CommandLineParser`](./struct.CommandLineParser.html)/[`SubCommandParser`](./struct.SubCommandParser.html) configuration.
     /// Parsing happens in two phases:
     /// 1. Token matching aligns the tokens to arguments and options.
     /// All tokens must be matched successfully in order to proceed to the next phase.
     /// 2. Token capturing parses the tokens by their respective types `T`.
     /// This phase will actually mutate your program variables.
     ///
-    /// If at any point the parser encounters an error (ex: un-matched token, un-capturable token, etc), it will exit with error code `1` (via `std::process::exit`).
+    /// If at any point the parser encounters an error (ex: un-matched token, un-capturable token, etc), it will exit with error code `1` (via [`std::process::exit`]).
     ///
     /// If the help switch (`-h` or `--help`) is encountered, the parser will display the help message and exit with error code `0`.
     /// This skips the phase #2 capturing.

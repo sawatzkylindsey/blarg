@@ -53,7 +53,7 @@ impl<'a> CommandLineParser<'a> {
     /// Add an argument/option to the command line parser.
     ///
     /// The order of argument parameters corresponds to their positional order during parsing.
-    /// The order of option parameters does not matter.
+    /// The order of option parameters does not affect the command parser semantics.
     ///
     /// ### Example
     /// ```
@@ -95,7 +95,7 @@ impl<'a> CommandLineParser<'a> {
     /// This changes the command line parser into a sub-command style command line parser.
     /// Any parameters added before the branch apply to the root parser.
     ///
-    /// Branching is always done with a `Scalar` argument: [`Condition`].
+    /// Branching is always done with a special `Scalar` argument: [`Condition`].
     ///
     /// ### Example
     /// ```
@@ -179,7 +179,7 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
     ///
     /// Sub-commands may be added arbitrarily, as long as the correspond to the branching type `B`.
     /// If repeated for the same `variant` of `B`, only the final version will be created on the parser.
-    /// The order of sub-commands does not matter.
+    /// The order of sub-commands does not affect the command parser semantics.
     ///
     /// ### Example
     /// ```
@@ -255,14 +255,14 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
 
 /// A sub-command line parser.
 ///
-/// Used with `SubCommandParser::command`.
+/// Used with [`SubCommandParser::command`].
 pub struct SubCommand<'a> {
     inner: CommandLineParser<'a>,
 }
 
 impl<'a> SubCommand<'a> {
     /// *Available using 'unit_test' crate feature only.*</br></br>
-    /// Build a `SubCommand` for use in testing.
+    /// Build a [`SubCommand`] for use in testing.
     ///
     /// ### Example
     /// ```
@@ -288,7 +288,8 @@ impl<'a> SubCommand<'a> {
     }
 
     /// *Available using 'unit_test' crate feature only.*</br></br>
-    /// Build a `GeneralParser` for testing.
+    /// Build a [`GeneralParser`] for testing.
+    /// See [`SubCommand::test_dummy`] for an example.
     #[cfg(feature = "unit_test")]
     pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
         self.inner
@@ -298,9 +299,9 @@ impl<'a> SubCommand<'a> {
     /// Add an argument/option to the sub-command.
     ///
     /// The order of argument parameters corresponds to their positional order during parsing.
-    /// The order of option parameters does not matter.
+    /// The order of option parameters does not affect the sub-command parser semantics.
     ///
-    /// See `SubCommandParser::command` for usage.
+    /// See [`SubCommandParser::command`] for usage.
     pub fn add<T>(self, parameter: Parameter<'a, T>) -> Self {
         SubCommand {
             inner: self.inner.add(parameter),

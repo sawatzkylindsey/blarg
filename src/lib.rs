@@ -107,13 +107,13 @@
 //! The sub-command section of the parser begins by `branch`ing this parser.
 //!
 //! Branching takes a special [`Condition`] parameter which only allows a `Scalar` field.
-//! You may describe the sub-commands on the condition via [Condition::choice](./struct.Condition.html#method.choice) (the same mechanism as [Parameter::choice](./struct.Parameter.html#method.choice)).
+//! You may describe the sub-commands on the condition via [Condition::choice](./struct.Condition.html#method.choice).
 //! In `blarg`, any type `T` can be used to define sub-commands; sub-commands needn't only be strings.
-//! See the condition section below for further explanation.
+//! See the **Condition** section below for further explanation.
 //!
 //! Once `branch`ed, the result is a [`SubCommandParser`] that allows you to setup individual sub-commands.
-//! These are controlled via [`SubCommandParser::command`], which takes the variant of `T` to which the sub-command applies, and a `impl FnOnce(SubCommand) -> SubCommand` to setup the parser.
-//! From here, setup the sub-command via [`SubCommand::add`] (which behaves the same as `CommandLineParser::add`).
+//! These are configured via [`SubCommandParser::command`], which takes the variant of `T` to which the sub-command applies, and a `impl FnOnce(SubCommand) -> SubCommand` to setup the parser.
+//! From here, setup the sub-command via [`SubCommand::add`].
 //!
 //! Notice, the sub-command structure is dictated solely by the usage of `command`; usage of `choice` affects the display documentation only.
 //! As a side effect of this distinction, you may include "undocumented" sub-commands (as well as "false" sub-commands), both shown in the example below.
@@ -171,13 +171,13 @@
 //! assert_eq!(s_prime, s);
 //! ```
 //!
-//! For more details on this requirement, see the `Condition` documentation.
+//! For more details on this requirement, see the [`Condition`] documentation.
 //!
 //! ### Defaults & Initials
 //! Technically, `blarg` has nothing to do with specifying default values for parameters.
 //! This may be confusing - defaults are a common feature for command line parsers!
 //! Instead, the defaults of your Cli will come from the variable initializations when configuring `blarg`.
-//! We support presenting defaults over the help message via derive Api, but behaviourally `blarg` does not take part in *setting* parameter defaults.
+//! We support presenting *initials* over the help message via [derive Api](./derive/index.html), but behaviourally `blarg` does not take part in *setting* parameter defaults.
 //!
 //! ```
 //! // The default for the 'verbose' parameter is 'false'.
@@ -190,7 +190,7 @@
 //! ```
 //!
 //! We'd also like to point out: semantically, defaults only apply to options (`Parameter::option`).
-//! By definition, arguments (`Parameter::argument`) must be specified on the Cli, so having a 'default' does not make sense.
+//! By definition, arguments (`Parameter::argument`) must be specified on the Cli, so having a "default" does not make sense.
 //!
 //! In the case of `Collection` parameters (for both options and arguments), the *initial* value again comes from the variable initialization.
 //! As parameters are received from the Cli input, these are *added to* the collection (via `Collectable`).

@@ -8,7 +8,7 @@ use crate::api::capture::*;
 use crate::model::Nargs;
 use crate::prelude::Collectable;
 
-/// An option parameter that takes a single value (`Nargs::Precisely(1)`).
+/// An option parameter that takes a single value (precisely 1).
 pub struct Scalar<'a, T> {
     variable: Rc<RefCell<&'a mut T>>,
 }
@@ -49,7 +49,7 @@ where
     }
 }
 
-/// An option parameter that takes no values (`Nargs::Precisely(0)`).
+/// An option parameter that takes no values (precisely 0).
 pub struct Switch<'a, T> {
     variable: Rc<RefCell<&'a mut T>>,
     target: Option<T>,
@@ -58,7 +58,7 @@ pub struct Switch<'a, T> {
 impl<'a, T> CliOption for Switch<'a, T> {}
 
 impl<'a, T> Switch<'a, T> {
-    /// Create a switch parameter (option).
+    /// Create a switch parameter.
     pub fn new(variable: &'a mut T, target: T) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -84,7 +84,7 @@ impl<'a, T> GenericCapturable<'a, T> for Switch<'a, T> {
     }
 }
 
-/// An option parameter that maps down to `Option`, taking a single value (`Nargs::Precisely(1)`).
+/// An option parameter that maps down to [`Option`], taking a single value (precisely 1).
 pub struct Optional<'a, T> {
     variable: Rc<RefCell<&'a mut Option<T>>>,
 }
@@ -92,7 +92,7 @@ pub struct Optional<'a, T> {
 impl<'a, T> CliOption for Optional<'a, T> {}
 
 impl<'a, T> Optional<'a, T> {
-    /// Create an optional parameter (option).
+    /// Create an optional parameter.
     pub fn new(variable: &'a mut Option<T>) -> Self {
         Self {
             variable: Rc::new(RefCell::new(variable)),
@@ -124,7 +124,7 @@ where
     }
 }
 
-/// A parameter that takes multiple values (specifiable `Nargs`).
+/// A parameter that takes multiple values (specifiable [`Nargs`]).
 pub struct Collection<'a, C, T>
 where
     C: 'a + Collectable<T>,
