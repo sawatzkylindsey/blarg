@@ -76,6 +76,8 @@ impl SubBar {
 }
 
 fn main() {
-    let parameters = Parameters::blarg_parse();
+    let (parameters, sub_foo, sub_bar): (Parameters, SubFoo, SubBar) = Parameters::blarg_parse();
     println!("{parameters:?}");
+    println!("{sub_foo:?}");
+    println!("{sub_bar:?}");
 }

@@ -33,6 +33,6 @@ fn elective_choices(value: Parameter<usize>) -> Parameter<usize> {
 }
 
 fn main() {
-    let parameters = Parameters::blarg_parse();
+    let parameters: Parameters = Parameters::blarg_parse();
     println!("{parameters:?}");
 }

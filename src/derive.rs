@@ -25,6 +25,7 @@
 //!  --daikon-root DAIKON_ROOT                                      type: String
 //! ```
 //!
+//!
 //! ### Parser/SubParser Configuration
 //! See the macro definition for details on configuring the [`BlargParser`] and [`BlargSubParser`].
 //!
@@ -56,28 +57,33 @@
 //! ```ignore
 //! #[derive(Default, BlargParser)]
 //! struct Parameters {
-//!     // .add(Parameter::argument(Scalar::new(&mut parameters.quick), "quick"))
 //!     #[blarg(argument)]
 //!     quick: usize,
+//!     // the above generates:
+//!     //  .add(Parameter::argument(Scalar::new(&mut parameters.quick), "quick"))
 //!
-//!     // .add(Parameter::option(Scalar::new(&mut parameters.brown), "brown", None))
 //!     #[blarg(option)]
 //!     brown: usize,
+//!     // the above generates:
+//!     //  .add(Parameter::option(Scalar::new(&mut parameters.brown), "brown", None))
 //!
-//!     // .add(Parameter::option(Scalar::new(&mut parameters.fox), "fox", Some('f')))
 //!     #[blarg(option, short = 'f')]
 //!     fox: usize,
+//!     // the above generates:
+//!     //  .add(Parameter::option(Scalar::new(&mut parameters.fox), "fox", Some('f')))
 //!
-//!     // .add(Parameter::argument(Collection::new(&mut parameters.jumps, Nargs::Precisely(2)), "jumps"))
-//!     // // assuming `impl<T> Collectable<T> for Pair<T>`
 //!     #[blarg(collection = Nargs::Precisely(2))]
 //!     jumps: Pair<usize>,
+//!     // the above generates:
+//!     //  .add(Parameter::argument(Collection::new(&mut parameters.jumps, Nargs::Precisely(2)), "jumps"))
+//!     // assumes: `impl<T> Collectable<T> for Pair<T>`
 //!
-//!     // .branch(Condition::new(Scalar::new(&mut parameters.over), "over"))
-//!     // .command(0, Sub0::setup_command)  // assuming `Sub0` is instrumented with `BlargSubParser`
-//!     // .command(1, Sub1::setup_command)  // assuming `Sub1` is instrumented with `BlargSubParser`
 //!     #[blarg(command = (0, Sub0), command = (1, Sub1))]
 //!     over: usize,
+//!     // the above generates:
+//!     //  .branch(Condition::new(Scalar::new(&mut parameters.over), "over"))
+//!     //  .command(0, Sub0::setup_command)  // assuming `Sub0` is instrumented with `BlargSubParser`
+//!     //  .command(1, Sub1::setup_command)  // assuming `Sub1` is instrumented with `BlargSubParser`
 //! }
 //!
 //! #[derive(Default, BlargSubParser)]
@@ -111,30 +117,34 @@
 //! ```ignore
 //! #[derive(Default, BlargParser)]
 //! struct Parameters {
-//!     // .add(Parameter::argument(Scalar::new(&mut parameters.lazy), "lazy")
-//!     //      .help("do something"))
 //!     #[blarg(help = "do something")]
 //!     lazy: usize,
+//!     // the above generates:
+//!     //  .add(Parameter::argument(Scalar::new(&mut parameters.lazy), "lazy")
+//!     //      .help("do something"))
 //!
-//!     // .add(Enumeration::setup_choices(Parameter::argument(Scalar::new(&mut parameters.dog), "dog")))
-//!     // // assuming `Enumeration` is instrumented with `BlargChoices`
 //!     #[blarg(choices)]
 //!     dog: Enumeration,
+//!     // the above generates:
+//!     //  .add(Enumeration::setup_choices(Parameter::argument(Scalar::new(&mut parameters.dog), "dog")))
+//!     // assumes: `Enumeration` is instrumented with `BlargChoices`
 //!
-//!     // .add(setup_choices(Parameter::argument(Scalar::new(&mut parameters.period), "period")))
 //!     #[blarg(choices = setup_choices)]
 //!     period: usize,
+//!     // the above generates:
+//!     //  .add(setup_choices(Parameter::argument(Scalar::new(&mut parameters.period), "period")))
+//! }
+//!
+//! /// My custom setup_choices fn.
+//! fn setup_choices(value: Parameter<usize>) -> Parameter<usize> {
+//!     value.choice(0, "the 0th choice")
+//!         .choice(1, "the 1st choice")
+//!         .choice(2, "the 2nd choice")
 //! }
 //!
 //! #[derive(BlargChoices)]
 //! enum Enumeration {
 //!     ..
-//! }
-//!
-//! fn setup_choices(value: Parameter<usize>) -> Parameter<usize> {
-//!     value.choice(0, "the 0th choice")
-//!         .choice(1, "the 1st choice")
-//!         .choice(2, "the 2nd choice")
 //! }
 //! ```
 //!
@@ -148,16 +158,18 @@
 //! ```ignore
 //! #[derive(BlargChoices)]
 //! enum Enumeration {
-//!     // .choice(VariantA, "")
 //!     VariantA,
+//!     // the above generates:
+//!     //  .choice(VariantA, "")
 //!
-//!     // .choice(VariantB, "the variant B choice")
 //!     #[blarg(help = "the variant B choice")]
 //!     VariantB,
+//!     // the above generates:
+//!     //  .choice(VariantB, "the variant B choice")
 //!
-//!     // Does *not* instrument a `.choice(..)`
 //!     #[blarg(hidden)]
 //!     VariantC,
+//!     // the above does *not* instrument a `.choice(..)`
 //! }
 //! ```
 

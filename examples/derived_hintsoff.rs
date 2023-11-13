@@ -58,6 +58,6 @@ impl<T: std::fmt::Debug> Collectable<T> for Pair<T> {
 }
 
 fn main() {
-    let parameters = Parameters::blarg_parse();
+    let parameters: Parameters = Parameters::blarg_parse();
     println!("{parameters:?}");
 }

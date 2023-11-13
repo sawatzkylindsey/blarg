@@ -25,7 +25,18 @@ pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 /// * `#[blarg(hints_off)]` disables the type/initial documentation hints.
 /// When unspecified, `blarg` automatically generates type/initial documentation via the "meta" documentation mechanism ([parameter meta](../struct.Parameter.html#method.meta) or [condition meta](../struct.Condition.html#method.meta)).
 ///
-/// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
+/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the field semantics of this struct.
+/// Supports:
+/// * `#[blarg(argument)] or #[blarg(option)]`
+/// * `#[blarg(short = C)]`
+/// * `#[blarg(collection = N)]`
+/// * `#[blarg(command = (Vi, Si), .., command = (Vj, Sj))]`
+///
+/// Refer to [help messages](../derive/index.html#help-messages) to configure the help message for this struct.
+/// Supports:
+/// * `#[blarg(help = "..")]`
+/// * `#[blarg(choices)]`
+/// * `#[blarg(choices = F)]`
 ///
 /// ### Example
 /// ```ignore
@@ -67,7 +78,17 @@ pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
 ///
 /// Additionally, take note: the *initializer* method is inherited from that of the [`BlargParser`].
 ///
-/// Refer to [blarg::derive](../derive/index.html#parameter-configuration) to configure the fields of this struct.
+/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the field semantics of this struct.
+/// Supports:
+/// * `#[blarg(argument)] or #[blarg(option)]`
+/// * `#[blarg(short = C)]`
+/// * `#[blarg(collection = N)]`
+///
+/// Refer to [help messages](../derive/index.html#help-messages) to configure the help message for this struct.
+/// Supports:
+/// * `#[blarg(help = "..")]`
+/// * `#[blarg(choices)]`
+/// * `#[blarg(choices = F)]`
 ///
 /// ### Example
 /// ```ignore
@@ -106,7 +127,10 @@ pub(crate) const MACRO_BLARG_CHOICES: &str = "BlargChoices";
 ///
 /// Supports the no enum attributes.
 ///
-/// Refer to [blarg::derive](../derive/index.html#choices) to configure the variants of this enum.
+/// Refer to [choices](../derive/index.html#choices) to configure the variants of this enum.
+/// Supports:
+/// * `#[blarg(help = "..")]`
+/// * `#[blarg(hidden)]`
 ///
 /// ### Example
 /// ```ignore
