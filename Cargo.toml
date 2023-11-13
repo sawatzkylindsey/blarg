@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sawatzkylindsey/blarg"
@@ -28,5 +28,5 @@ all-features = true
 unit_test = ["blarg_builder/unit_test"]
 
 [dependencies]
-blarg_builder = { version = "1.0.1", path = "./blarg_builder" }
-blarg_derive = { version = "1.0.1", path = "./blarg_derive" }
+blarg_builder = { version = "1.0.2", path = "./blarg_builder" }
+blarg_derive = { version = "1.0.2", path = "./blarg_derive" }
