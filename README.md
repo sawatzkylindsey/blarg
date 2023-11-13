@@ -52,8 +52,7 @@ Check out the rustdoc for more information.
                 Some('v'),
             ))
             .add(Parameter::argument(Scalar::new(&mut value), "value").meta(vec!["type: u32"]))
-            .build()
-            .expect("Invalid argument parser configuration");
+            .build();
         parser.parse();
         println!("value: {value}, verbose: {verbose}");
     }
