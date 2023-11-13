@@ -83,8 +83,7 @@ fn main() {
             Parameter::argument(Collection::new(&mut items, Nargs::AtLeastOne), "item")
                 .help("The items."),
         )
-        .build()
-        .expect("Invalid argument parser configuration");
+        .build();
     parser.parse();
     println!("Items: {items:?}");
     execute(_verbose, operand, initial, _countries, items);

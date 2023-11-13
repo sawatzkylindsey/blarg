@@ -10,14 +10,14 @@ pub(crate) struct MatchTokens {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(super) enum CloseError {
-    #[error("Too few values provided for '{name}' (provided={provided}, expected={expected}).")]
+    #[error("too few values provided for '{name}' (provided={provided}, expected={expected}).")]
     TooFewValues {
         name: String,
         provided: usize,
         expected: u8,
     },
 
-    #[error("Too many values provided for '{name}' (provided={provided}, expected={expected}).")]
+    #[error("too many values provided for '{name}' (provided={provided}, expected={expected}).")]
     TooManyValues {
         name: String,
         provided: usize,

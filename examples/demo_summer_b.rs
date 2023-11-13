@@ -9,8 +9,7 @@ fn main() {
             Parameter::argument(Collection::new(&mut items, Nargs::AtLeastOne), "item")
                 .help("The items to sum."),
         )
-        .build()
-        .expect("The parser configuration must be valid (ex: no duplicate parameter names).");
+        .build();
 
     parser.parse();
     let sum: u32 = items.iter().sum();

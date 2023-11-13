@@ -48,12 +48,15 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Pair<T> {
 }
 
 impl<T: std::fmt::Debug> Collectable<T> for Pair<T> {
-    fn add(&mut self, item: T) {
+    fn add(&mut self, item: T) -> Result<(), String> {
         if self.left.is_none() {
             self.left.replace(item);
         } else if self.right.is_none() {
             self.right.replace(item);
         }
+
+        // We don't need `Pair` to be fallible because we're using `Nargs::Precisely(2)`.
+        Ok(())
     }
 }
 

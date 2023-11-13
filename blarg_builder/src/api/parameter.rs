@@ -3,9 +3,9 @@ use crate::matcher::{ArgumentConfig, Bound, OptionConfig};
 use crate::model::Nargs;
 use crate::parser::{
     AnonymousCapturable, ArgumentCapture, ArgumentParameter, OptionCapture, OptionParameter,
-    ParseError,
 };
 use crate::prelude::Choices;
+use crate::InvalidCapture;
 use std::collections::HashMap;
 
 pub(crate) struct AnonymousCapture<'a, T: 'a> {
@@ -25,8 +25,8 @@ impl<'a, T> AnonymousCapturable for AnonymousCapture<'a, T> {
         self.field.matched();
     }
 
-    fn capture(&mut self, value: &str) -> Result<(), ParseError> {
-        self.field.capture(value).map_err(ParseError::from)
+    fn capture(&mut self, value: &str) -> Result<(), InvalidCapture> {
+        self.field.capture(value)
     }
 }
 
@@ -146,7 +146,7 @@ impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentParameter {
 /// Used with [`CommandLineParser::branch`](./struct.CommandLineParser.html#method.branch).
 ///
 /// There is an implicit (non-compile time) requirement for the type `T` of a `Condition`:
-/// > The implementations of `std::fmt::Display` and `std::str::FromStr` must form an inverse relationship.
+/// > The implementations of `std::str::FromStr` must invert `std::fmt::Display`.
 ///
 /// This sounds scary and onerous, but most types will naturally adhere to this requirement.
 /// Consider rusts implementation for `bool`, where this is requirement holds:
@@ -185,7 +185,7 @@ impl<'a, T> From<&ParameterInner<'a, T>> for ArgumentParameter {
 /// #   }
 /// # }
 /// assert_eq!(FooBar::from_str("Foo").unwrap().to_string(), "Foo");
-/// // Display does not invert FromStr!
+/// // FromStr does not invert Display!
 /// assert_ne!(FooBar::from_str("foo").unwrap().to_string(), "foo");
 /// ```
 pub struct Condition<'a, T>(Parameter<'a, T>);
@@ -199,7 +199,7 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Condition<'a, T> {
     /// use blarg::{Condition, Scalar};
     /// use std::str::FromStr;
     ///
-    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr` with an inverse relationship.
+    /// // Be sure to implement `std::str::FromStr` so that it inverts `std::fmt::Display`.
     /// enum FooBar {
     ///     Foo,
     ///     Bar,
@@ -313,7 +313,7 @@ impl<'a, T: std::str::FromStr + std::fmt::Display> Choices<T> for Condition<'a, 
     /// use blarg::{prelude::*, Condition, Scalar};
     /// use std::str::FromStr;
     ///
-    /// // Be sure to implement `std::fmt::Display` and `std::str::FromStr`.
+    /// // Be sure to implement `std::str::FromStr` so that it inverts `std::fmt::Display`.
     /// enum FooBar {
     ///     Foo,
     ///     Bar,

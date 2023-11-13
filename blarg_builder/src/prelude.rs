@@ -5,7 +5,8 @@
 /// Must be imported in order to implement a custom `Collectable`.
 pub trait Collectable<T> {
     /// Add a value to this `Collectable`.
-    fn add(&mut self, item: T);
+    /// Return `Ok` on success, and `Err(message)` on failure.
+    fn add(&mut self, item: T) -> Result<(), String>;
 }
 
 /// Behaviour for documenting choices on a [`Parameter`](../struct.Parameter.html) or [`Condition`](../struct.Condition.html).

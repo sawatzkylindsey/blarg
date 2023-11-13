@@ -17,7 +17,7 @@ pub trait GenericCapturable<'a, T> {
     fn matched(&mut self);
 
     /// Capture a value into the generic type T for this parameter.
-    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion>;
+    fn capture(&mut self, token: &str) -> Result<(), InvalidCapture>;
 
     /// Get the `Nargs` for this implementation.
     fn nargs(&self) -> Nargs;
@@ -25,8 +25,12 @@ pub trait GenericCapturable<'a, T> {
 
 #[derive(Debug, Error)]
 #[doc(hidden)]
-#[error("'{token}' cannot convert to {type_name}.")]
-pub struct InvalidConversion {
-    pub(crate) token: String,
-    pub(crate) type_name: &'static str,
+pub enum InvalidCapture {
+    #[error("cannot convert '{token}' to {type_name}.")]
+    InvalidConversion {
+        token: String,
+        type_name: &'static str,
+    },
+    #[error("cannot collect '{token}': {message}.")]
+    InvalidAdd { token: String, message: String },
 }

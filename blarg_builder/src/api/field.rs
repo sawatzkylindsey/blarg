@@ -33,9 +33,9 @@ where
         // Do nothing.
     }
 
-    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
-        let result: Result<T, InvalidConversion> =
-            T::from_str(token).map_err(|_| InvalidConversion {
+    fn capture(&mut self, token: &str) -> Result<(), InvalidCapture> {
+        let result: Result<T, InvalidCapture> =
+            T::from_str(token).map_err(|_| InvalidCapture::InvalidConversion {
                 token: token.to_string(),
                 type_name: std::any::type_name::<T>(),
             });
@@ -75,7 +75,7 @@ impl<'a, T> GenericCapturable<'a, T> for Switch<'a, T> {
             .expect("internal error - must be able to take the Switch#target");
     }
 
-    fn capture(&mut self, _token: &str) -> Result<(), InvalidConversion> {
+    fn capture(&mut self, _token: &str) -> Result<(), InvalidCapture> {
         unreachable!("internal error - must not capture on a Switch");
     }
 
@@ -108,9 +108,9 @@ where
         // Do nothing
     }
 
-    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
-        let result: Result<T, InvalidConversion> =
-            T::from_str(token).map_err(|_| InvalidConversion {
+    fn capture(&mut self, token: &str) -> Result<(), InvalidCapture> {
+        let result: Result<T, InvalidCapture> =
+            T::from_str(token).map_err(|_| InvalidCapture::InvalidConversion {
                 token: token.to_string(),
                 type_name: std::any::type_name::<T>(),
             });
@@ -161,14 +161,19 @@ where
         // Do nothing.
     }
 
-    fn capture(&mut self, token: &str) -> Result<(), InvalidConversion> {
-        let result: Result<T, InvalidConversion> =
-            T::from_str(token).map_err(|_| InvalidConversion {
+    fn capture(&mut self, token: &str) -> Result<(), InvalidCapture> {
+        let result: Result<T, InvalidCapture> =
+            T::from_str(token).map_err(|_| InvalidCapture::InvalidConversion {
                 token: token.to_string(),
                 type_name: std::any::type_name::<T>(),
             });
         let value = result?;
-        (**self.variable.borrow_mut()).add(value);
+        (**self.variable.borrow_mut())
+            .add(value)
+            .map_err(|message| InvalidCapture::InvalidAdd {
+                token: token.to_string(),
+                message,
+            })?;
         Ok(())
     }
 
@@ -178,14 +183,19 @@ where
 }
 
 impl<T> Collectable<T> for Vec<T> {
-    fn add(&mut self, item: T) {
+    fn add(&mut self, item: T) -> Result<(), String> {
         self.push(item);
+        Ok(())
     }
 }
 
 impl<T: Eq + std::hash::Hash> Collectable<T> for HashSet<T> {
-    fn add(&mut self, item: T) {
-        self.insert(item);
+    fn add(&mut self, item: T) -> Result<(), String> {
+        if self.insert(item) {
+            Ok(())
+        } else {
+            Err("set already contains item".to_string())
+        }
     }
 }
 
@@ -196,18 +206,19 @@ mod tests {
     #[test]
     fn vec() {
         let mut collection: Vec<u32> = Vec::default();
-        collection.add(1);
-        collection.add(0);
+        collection.add(1).unwrap();
+        collection.add(0).unwrap();
         assert_eq!(collection, vec![1, 0]);
     }
 
     #[test]
     fn hash_set() {
         let mut collection: HashSet<u32> = HashSet::default();
-        collection.add(1);
-        collection.add(0);
-        collection.add(1);
+        collection.add(1).unwrap();
+        collection.add(0).unwrap();
+        let message = collection.add(1).unwrap_err();
         assert_eq!(collection, HashSet::from([1, 0]));
+        assert_eq!(message, "set already contains item".to_string());
     }
 
     #[test]
@@ -259,8 +270,12 @@ mod tests {
         let mut collection = Collection::new(&mut variable, Nargs::Any);
         collection.capture("1").unwrap();
         collection.capture("0").unwrap();
-        collection.capture("0").unwrap();
+        let error = collection.capture("0").unwrap_err();
         assert_eq!(variable, HashSet::from([0, 1]));
+        assert_matches!(error, InvalidCapture::InvalidAdd { token, message } => {
+            assert_eq!(token, "0".to_string());
+            assert_eq!(message, "set already contains item".to_string());
+        });
     }
 
     #[test]

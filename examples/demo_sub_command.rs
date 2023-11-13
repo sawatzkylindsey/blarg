@@ -34,8 +34,7 @@ fn main() {
         // Specify an argument-less & option-less sub-command by leaving the 'sub' untouched.
         .command(2, |sub_command| sub_command)
         // Since we never add "3", it isn't a true sub-command.
-        .build()
-        .expect("The parser configuration must be valid (ex: no duplicate parameter names).");
+        .build();
 
     parser.parse();
 

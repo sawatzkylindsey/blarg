@@ -6,28 +6,28 @@ use crate::matcher::model::*;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(crate) enum TokenMatcherError {
-    #[error("Cannot duplicate the option '{0}'.")]
+    #[error("cannot duplicate the option '{0}'.")]
     DuplicateOption(String),
 
-    #[error("Cannot duplicate the short option '{0}'.")]
+    #[error("cannot duplicate the short option '{0}'.")]
     DuplicateShortOption(char),
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub(crate) enum MatchError {
-    #[error("Not enough tokens provided to parameter '{0}'.")]
+    #[error("not enough tokens provided to parameter '{0}'.")]
     Undercomplete(String),
 
-    #[error("Too many tokens provided to parameter '{0}'.")]
+    #[error("too many tokens provided to parameter '{0}'.")]
     Overcomplete(String),
 
-    #[error("No more arguments to match against.")]
+    #[error("no more arguments to match against.")]
     ArgumentsExhausted,
 
-    #[error("Option '{0}' does not exist.")]
+    #[error("option '{0}' does not exist.")]
     InvalidOption(String),
 
-    #[error("Short option '{0}' does not exist.")]
+    #[error("short option '{0}' does not exist.")]
     InvalidShortOption(char),
 }
 

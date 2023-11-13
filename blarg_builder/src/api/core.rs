@@ -1,19 +1,12 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-use crate::api::capture::*;
 use crate::api::{Condition, Parameter, ParameterClass};
 use crate::parser::{
     ArgumentCapture, ArgumentParameter, ConfigError, ConsoleInterface, GeneralParser,
     OptionCapture, UserInterface,
 };
-use crate::parser::{OptionParameter, ParseError, ParseUnit, Parser, Printer};
-
-impl From<InvalidConversion> for ParseError {
-    fn from(error: InvalidConversion) -> Self {
-        ParseError(error.to_string())
-    }
-}
+use crate::parser::{OptionParameter, ParseUnit, Parser, Printer};
 
 /// The base command line parser.
 ///
@@ -24,8 +17,7 @@ impl From<InvalidConversion> for ParseError {
 ///
 /// let parser = CommandLineParser::new("program")
 ///     // Configure with CommandLineParser::add and CommandLineParser::branch.
-///     .build()
-///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+///     .build();
 /// parser.parse_tokens(empty::slice()).unwrap();
 /// ```
 pub struct CommandLineParser<'a> {
@@ -65,8 +57,7 @@ impl<'a> CommandLineParser<'a> {
     /// let parser = CommandLineParser::new("program")
     ///     .add(Parameter::argument(Scalar::new(&mut a), "a"))
     ///     .add(Parameter::argument(Scalar::new(&mut b), "b"))
-    ///     .build()
-    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///     .build();
     ///
     /// parser.parse_tokens(vec!["1", "2"].as_slice()).unwrap();
     ///
@@ -111,8 +102,7 @@ impl<'a> CommandLineParser<'a> {
     ///     .command("the-command".to_string(), |sub| {
     ///         sub.add(Parameter::argument(Scalar::new(&mut belongs_to_sub_command), "belongs_to_sub_command"))
     ///     })
-    ///     .build()
-    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///     .build();
     ///
     /// parser.parse_tokens(vec!["1", "the-command", "2"].as_slice()).unwrap();
     ///
@@ -120,7 +110,7 @@ impl<'a> CommandLineParser<'a> {
     /// assert_eq!(&sub_command, "the-command");
     /// assert_eq!(belongs_to_sub_command, 2);
     /// ```
-    pub fn branch<T: std::str::FromStr + std::fmt::Display>(
+    pub fn branch<T: std::str::FromStr + std::fmt::Display + PartialEq>(
         mut self,
         condition: Condition<'a, T>,
     ) -> SubCommandParser<'a, T> {
@@ -152,10 +142,23 @@ impl<'a> CommandLineParser<'a> {
         ))
     }
 
+    /// Build the command line parser as a Result.
+    /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
+    pub fn build_parser(self) -> Result<GeneralParser<'a>, ConfigError> {
+        self.build_with_interface(Box::new(ConsoleInterface::default()))
+    }
+
     /// Build the command line parser.
     /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
-    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
-        self.build_with_interface(Box::new(ConsoleInterface::default()))
+    /// If an error is encountered, exits with error code `1` (via [`std::process::exit`]).
+    pub fn build(self) -> GeneralParser<'a> {
+        match self.build_parser() {
+            Ok(gp) => gp,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -163,14 +166,16 @@ impl<'a> CommandLineParser<'a> {
 pub struct SubCommandParser<'a, B: std::fmt::Display> {
     root: CommandLineParser<'a>,
     commands: HashMap<String, CommandLineParser<'a>>,
+    deferred_error: Option<ConfigError>,
     _phantom: PhantomData<B>,
 }
 
-impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
+impl<'a, B: std::str::FromStr + std::fmt::Display + PartialEq> SubCommandParser<'a, B> {
     fn new(root: CommandLineParser<'a>) -> Self {
         Self {
             root,
             commands: HashMap::default(),
+            deferred_error: None,
             _phantom: PhantomData,
         }
     }
@@ -193,8 +198,7 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
     ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
     ///     .command("a".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_a), "value_a")))
     ///     .command("b".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_b), "value_b")))
-    ///     .build()
-    ///     .expect("The parser configuration must be valid (ex: no parameter name repeats).");
+    ///     .build();
     ///
     /// parser.parse_tokens(vec!["a", "1"].as_slice()).unwrap();
     ///
@@ -208,6 +212,29 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
         setup_fn: impl FnOnce(SubCommand<'a>) -> SubCommand<'a>,
     ) -> Self {
         let command_str = variant.to_string();
+
+        // Check if the variant does not respect the FromStr-inverts-Display invariant.
+        match B::from_str(&command_str) {
+            // This is where someone is trying to trick us!
+            // The from_str inverts to a valid `B`, however it is not this specific variant.
+            Ok(value) if value != variant => {
+                self.deferred_error.replace(ConfigError(format!(
+                    "parameter '{}' contains invalid sub-command '{command_str}': FromStr does not invert Display.",
+                    self.root.discriminator.as_ref().expect("internal error - root must have a discriminator"),
+                )));
+            }
+            // The from_str simply does not invert to a valid `B`.
+            Err(_) => {
+                self.deferred_error.replace(ConfigError(format!(
+                    "parameter '{}' contains invalid sub-command '{command_str}': FromStr does not invert Display.",
+                    self.root.discriminator.as_ref().expect("internal error - root must have a discriminator"),
+                )));
+            }
+            _ => {
+                // Do nothing.
+            }
+        }
+
         let inner = CommandLineParser::new(command_str.clone());
         let sub_command = setup_fn(SubCommand { inner });
         self.commands.insert(command_str, sub_command.inner);
@@ -218,6 +245,10 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
         self,
         user_interface: Box<dyn UserInterface>,
     ) -> Result<GeneralParser<'a>, ConfigError> {
+        if let Some(error) = self.deferred_error {
+            return Err(error);
+        }
+
         let mut sub_commands = HashMap::default();
 
         for (discriminee, cp) in self.commands.into_iter() {
@@ -246,10 +277,23 @@ impl<'a, B: std::fmt::Display> SubCommandParser<'a, B> {
         ))
     }
 
+    /// Build the sub-command based command line parser as a Result.
+    /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
+    pub fn build_parser(self) -> Result<GeneralParser<'a>, ConfigError> {
+        self.build_with_interface(Box::new(ConsoleInterface::default()))
+    }
+
     /// Build the sub-command based command line parser.
     /// This finalizes the configuration and checks for errors (ex: a repeated parameter name).
-    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
-        self.build_with_interface(Box::new(ConsoleInterface::default()))
+    /// If an error is encountered, exits with error code `1` (via [`std::process::exit`]).
+    pub fn build(self) -> GeneralParser<'a> {
+        match self.build_parser() {
+            Ok(gp) => gp,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -276,7 +320,7 @@ impl<'a> SubCommand<'a> {
     /// }
     ///
     /// let mut x: u32 = 1;
-    /// let parser = setup_fn(&mut x)(SubCommand::test_dummy()).build().unwrap();
+    /// let parser = setup_fn(&mut x)(SubCommand::test_dummy()).build_parser().unwrap();
     /// parser.parse_tokens(vec!["2"].as_slice()).unwrap();
     /// assert_eq!(x, 2);
     /// ```
@@ -291,7 +335,7 @@ impl<'a> SubCommand<'a> {
     /// Build a [`GeneralParser`] for testing.
     /// See [`SubCommand::test_dummy`] for an example.
     #[cfg(feature = "unit_test")]
-    pub fn build(self) -> Result<GeneralParser<'a>, ConfigError> {
+    pub fn build_parser(self) -> Result<GeneralParser<'a>, ConfigError> {
         self.inner
             .build_with_interface(Box::new(ConsoleInterface::default()))
     }
@@ -325,7 +369,7 @@ mod tests {
         let clp = CommandLineParser::new("program");
 
         // Execute
-        let parser = clp.build().unwrap();
+        let parser = clp.build_parser().unwrap();
 
         // Verify
         parser.parse_tokens(empty::slice()).unwrap();
@@ -361,7 +405,7 @@ mod tests {
             ));
 
         // Execute
-        let parser = clp.build().unwrap();
+        let parser = clp.build_parser().unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -418,7 +462,7 @@ mod tests {
             });
 
         // Execute
-        let parser = scp.build().unwrap();
+        let parser = scp.build_parser().unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -453,7 +497,7 @@ mod tests {
             });
 
         // Execute
-        let parser = scp.build().unwrap();
+        let parser = scp.build_parser().unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -503,7 +547,7 @@ mod tests {
             });
 
         // Execute
-        let parser = scp.build().unwrap();
+        let parser = scp.build_parser().unwrap();
 
         // Verify
         // We testing that build sets up the right parser.
@@ -743,7 +787,9 @@ mod tests {
         }
 
         let mut x: u32 = 1;
-        let parser = setup_fn(&mut x)(SubCommand::test_dummy()).build().unwrap();
+        let parser = setup_fn(&mut x)(SubCommand::test_dummy())
+            .build_parser()
+            .unwrap();
         let tokens = vec!["2"];
 
         // Execute
@@ -751,5 +797,69 @@ mod tests {
 
         // Verify
         assert_eq!(x, 2);
+    }
+
+    #[derive(PartialEq)]
+    enum Nefarious {
+        Foo,
+        Bar,
+    }
+
+    impl std::fmt::Display for Nefarious {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Nefarious::Foo => write!(f, "foo"),
+                Nefarious::Bar => write!(f, "bar"),
+            }
+        }
+    }
+
+    impl std::str::FromStr for Nefarious {
+        type Err = String;
+
+        fn from_str(value: &str) -> Result<Self, Self::Err> {
+            match value.to_lowercase().as_str() {
+                "bar" => Ok(Nefarious::Foo),
+                _ => Err(format!("unknown: {}", value)),
+            }
+        }
+    }
+
+    #[test]
+    fn not_invertable_command() {
+        // Setup
+        let mut nefarious = Nefarious::Bar;
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .branch(Condition::new(Scalar::new(&mut nefarious), "abc"))
+            .command(Nefarious::Foo, |sub| sub);
+        let (sender, _receiver) = channel_interface();
+
+        // Execute
+        let result = scp.build_with_interface(Box::new(sender)).unwrap_err();
+
+        // Verify
+        assert_matches!(result, ConfigError(message) => {
+            assert_eq!(message, "parameter 'abc' contains invalid sub-command 'foo': FromStr does not invert Display.".to_string());
+        });
+    }
+
+    #[test]
+    fn nefarious_command() {
+        // Setup
+        let mut nefarious = Nefarious::Bar;
+        let clp = CommandLineParser::new("program");
+        let scp = clp
+            .branch(Condition::new(Scalar::new(&mut nefarious), "abc"))
+            .command(Nefarious::Bar, |sub| sub);
+        let (sender, _receiver) = channel_interface();
+
+        // Execute
+        let result = scp.build_with_interface(Box::new(sender)).unwrap_err();
+
+        // Verify
+        assert_matches!(result, ConfigError(message) => {
+            assert_eq!(message, "parameter 'abc' contains invalid sub-command 'bar': FromStr does not invert Display.".to_string());
+        });
     }
 }

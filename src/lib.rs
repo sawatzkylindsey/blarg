@@ -23,14 +23,8 @@
 //! To be clear, we are of the opinion that the cost of argument parsing is insignificant with respect to any non-trivial program.
 //! That said, `blarg` will still aim to minimize its memory & CPU footprint, within reason.
 //!
-//! ### Future
 //! As it currently stands, we feel `blarg` fits a niche role in the rust ecosystem.
-//! Additionally, we have other plans you may be interested in:
-//! * ~Derive macro support.~
-//! * ~Automatic choice documentation.~
-//! * ~Default/initial value documentation.~
-//! * ~Help message formatting, such as line wrapping.~
-//! * Fallible `Collectable`s.
+//! We hope you do as well!
 //!
 //! # Usage
 //! This page includes a few demos on using `blarg.`
@@ -162,7 +156,7 @@
 //!
 //! **Condition**</br>
 //! In order to support arbitrary branching types `T`, we use an implicit (not compile-time enforced) requirement.
-//! Simply, `std::str::FromStr` for `T` must be inverted by [`std::fmt::Display`] for the same type `T`.
+//! Simply, [`std::str::FromStr`] for `T` must be inverted by [`std::fmt::Display`] for the same type `T`.
 //! In code, this means the following assertion must succeed.
 //!
 //! ```ignore

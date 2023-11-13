@@ -89,8 +89,7 @@ fn main() {
                 None,
             ))
         })
-        .build()
-        .expect("Invalid argument parser configuration");
+        .build();
     parser.parse();
     println!("Items: {items:?}");
     execute(verbose, foo_bar, initial, countries, items);

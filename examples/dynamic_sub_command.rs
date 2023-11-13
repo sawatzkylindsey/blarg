@@ -37,7 +37,7 @@ fn main() {
         });
     }
 
-    let parser = clp.build().expect("Invalid argument parser configuration");
+    let parser = clp.build();
 
     parser.parse();
 

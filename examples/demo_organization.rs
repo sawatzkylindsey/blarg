@@ -28,8 +28,7 @@ fn main() {
             Collection::new(&mut params.items, Nargs::AtLeastOne),
             "item",
         ))
-        .build()
-        .expect("The parser configuration must be valid (ex: no duplicate parameter names).");
+        .build();
 
     parser.parse();
     let sum: u32 = params.items.iter().sum();

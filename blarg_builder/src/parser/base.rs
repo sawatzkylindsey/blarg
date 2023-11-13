@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::constant::*;
 use crate::matcher::*;
+use crate::InvalidCapture;
 
 // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
 // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
@@ -10,7 +11,7 @@ pub(crate) type OptionCapture<'a> = (OptionConfig, Box<(dyn AnonymousCapturable 
 pub(crate) type ArgumentCapture<'a> = (ArgumentConfig, Box<(dyn AnonymousCapturable + 'a)>);
 
 #[derive(Debug, Error)]
-#[error("Config error: {0}")]
+#[error("Configuration error: {0}")]
 pub struct ConfigError(pub(crate) String);
 
 impl From<TokenMatcherError> for ConfigError {
@@ -25,13 +26,11 @@ impl From<TokenMatcherError> for ConfigError {
 }
 
 #[derive(Debug, Error)]
-#[error("Parse error: {0}")]
-pub(crate) struct ParseError(pub(crate) String);
-
-impl From<MatchError> for ParseError {
-    fn from(error: MatchError) -> Self {
-        ParseError(error.to_string())
-    }
+pub(crate) enum ParseError {
+    #[error("Parse error for matching: {0}")]
+    MatchPhase(MatchError),
+    #[error("Parse error for capture: {0}")]
+    CapturePhase(InvalidCapture),
 }
 
 /// Behaviour to capture an implicit generic type T from an input `&str`.
@@ -42,12 +41,13 @@ pub(crate) trait AnonymousCapturable {
     fn matched(&mut self);
 
     /// Capture a value anonymously for this parameter.
-    fn capture(&mut self, value: &str) -> Result<(), ParseError>;
+    fn capture(&mut self, value: &str) -> Result<(), InvalidCapture>;
 }
 
 #[cfg(test)]
 pub mod test {
-    use crate::parser::{AnonymousCapturable, ParseError};
+    use crate::parser::AnonymousCapturable;
+    use crate::InvalidCapture;
 
     pub(crate) struct BlackHole {}
 
@@ -62,7 +62,7 @@ pub mod test {
             // Do nothing
         }
 
-        fn capture(&mut self, _value: &str) -> Result<(), ParseError> {
+        fn capture(&mut self, _value: &str) -> Result<(), InvalidCapture> {
             // Do nothing
             Ok(())
         }
@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
         for (oc, f) in options.into_iter() {
             if captures.insert(oc.name().to_string(), f).is_some() {
                 return Err(ConfigError(format!(
-                    "Cannot duplicate the parameter '{}'.",
+                    "cannot duplicate the parameter '{}'.",
                     oc.name()
                 )));
             }
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
         for (ac, f) in arguments.into_iter() {
             if captures.insert(ac.name().to_string(), f).is_some() {
                 return Err(ConfigError(format!(
-                    "Cannot duplicate the parameter '{}'.",
+                    "cannot duplicate the parameter '{}'.",
                     ac.name()
                 )));
             }
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
                     let token_length = token.len();
                     token_matcher
                         .feed(token)
-                        .map_err(|e| (fed, ParseError::from(e)))?;
+                        .map_err(|e| (fed, ParseError::MatchPhase(e)))?;
                     fed += token_length;
 
                     if minimal_consume && token_matcher.can_close() {
@@ -162,10 +162,10 @@ impl<'a> Parser<'a> {
                 return Ok(Action::PrintHelp);
             }
             Ok(matches) => Ok(matches),
-            Err((offset, e, _)) => Err((offset, ParseError::from(e))),
+            Err((offset, e, _)) => Err((offset, ParseError::MatchPhase(e))),
         }?;
 
-        let mut discriminee: Option<(String, OffsetValue)> = None;
+        let mut discriminee: Option<String> = None;
 
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
         for match_tokens in matches.values {
@@ -181,17 +181,14 @@ impl<'a> Parser<'a> {
             for (offset, value) in &match_tokens.values {
                 box_capture
                     .capture(value)
-                    .map_err(|error| (*offset, error))?;
+                    .map_err(|error| (*offset, ParseError::CapturePhase(error)))?;
             }
 
             if let Some(ref target) = &discriminator {
                 if target == &match_tokens.name {
                     match &match_tokens.values[..] {
-                        [(offset, value)] => {
-                            if discriminee
-                                .replace((target.clone(), (*offset, value.clone())))
-                                .is_some()
-                            {
+                        [(_offset, value)] => {
+                            if discriminee.replace(value.clone()).is_some() {
                                 unreachable!(
                                     "internal error - discriminator cannot have multiple matches"
                                 );
@@ -217,7 +214,7 @@ impl<'a> Parser<'a> {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Continue {
-        discriminee: Option<(String, OffsetValue)>,
+        discriminee: Option<String>,
         remaining: Vec<String>,
     },
     PrintHelp,
@@ -330,14 +327,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec!["1"], 0, "1", vec![])]
-    #[case(vec!["01"], 0, "01", vec![])]
-    #[case(vec!["1", "abc"], 0, "1", vec!["abc"])]
-    #[case(vec!["1", "abc", "2"], 0, "1", vec!["abc", "2"])]
-    #[case(vec!["--flag", "1"], 6, "1", vec![])]
+    #[case(vec!["1"], "1", vec![])]
+    #[case(vec!["01"], "01", vec![])]
+    #[case(vec!["1", "abc"], "1", vec!["abc"])]
+    #[case(vec!["1", "abc", "2"], "1", vec!["abc", "2"])]
+    #[case(vec!["--flag", "1"], "1", vec![])]
     fn parser_discriminator(
         #[case] tokens: Vec<&str>,
-        #[case] discriminee_offset: usize,
         #[case] discriminee_value: &str,
         #[case] expected: Vec<&str>,
     ) {
@@ -364,7 +360,7 @@ mod tests {
         assert_eq!(
             result,
             Action::Continue {
-                discriminee: Some((name, (discriminee_offset, discriminee_value.to_string()))),
+                discriminee: Some(discriminee_value.to_string()),
                 remaining: expected.into_iter().map(|s| s.to_string()).collect(),
             }
         );
