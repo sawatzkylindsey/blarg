@@ -69,16 +69,10 @@ fn main() {
                 .choice(Operand::Add, "+")
                 .choice(Operand::Multiply, "*"),
         )
-        .add(Parameter::option(
-            Optional::new(&mut initial),
-            "initial",
-            None,
-        ))
-        .add(Parameter::option(
-            Collection::new(&mut _countries, Nargs::AtLeastOne),
-            "country",
-            None,
-        ))
+        .add(Parameter::option(Optional::new(&mut initial), "initial", None)
+            .meta(vec!["testing a really long meta.. abcdefghijklmnopqrstuvwxyz"])
+        )
+        .add(Parameter::option(Collection::new(&mut _countries, Nargs::AtLeastOne), "country", None))
         .add(
             Parameter::argument(Collection::new(&mut items, Nargs::AtLeastOne), "item")
                 .help("The items."),

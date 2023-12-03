@@ -46,19 +46,18 @@
 //! positional arguments:
 //!  ITEM [...]  The items to sum.
 //! options:
-//!  -h, --help  Show this help message and
-//!              exit.
+//!  -h, --help  Show this help message and exit.
 //!
 //! $ summer 1 2 3
 //! Sum: 6
 //!
 //! $ summer
-//! Parse error: Not enough tokens provided to parameter 'ITEM'.
+//! Parse error for matching: not enough tokens provided to parameter 'ITEM'.
 //!
 //! ^
 //!
 //! $ summer 1 blah
-//! Parse error: 'blah' cannot convert to u32.
+//! Parse error for capture: cannot convert 'blah' to u32.
 //! 1 blah
 //!   ^
 //! ```
@@ -130,8 +129,7 @@
 //! positional arguments:
 //!  ARG
 //! options:
-//!  -h, --help  Show this help message and
-//!              exit.
+//!  -h, --help  Show this help message and exit.
 //!  --opt
 //!
 //! $ sub-command 0 true
@@ -149,7 +147,7 @@
 //! argument-less & option-less
 //!
 //! $ sub-command 3
-//! Parse error: Unknown sub-command '3' for parameter 'SUB'.
+//! Parse error for branching: unknown sub-command '3'.
 //! 3
 //! ^
 //! ```
@@ -205,6 +203,7 @@
 //! It may be useful to organize your program variables into a single struct.
 //! Configuring such an organizational struct is made seamless with the [derive Api](./derive/index.html).
 //! The following demonstrates how to *manually* configure an organizational struct with `blarg`.
+//! We also use this demo to illustrate testing your parser configuration.
 //!
 //! ```no_run
 #![doc = include_str!("../examples/demo_organization.rs")]
@@ -273,5 +272,6 @@
 //!
 //! # Features
 //! * `unit_test`: For features that help with unit testing.
+//! * `debug`: For features to help debug `blarg`.
 pub mod derive;
 pub use blarg_builder::*;

@@ -31,6 +31,8 @@ pub(crate) enum ParseError {
     MatchPhase(MatchError),
     #[error("Parse error for capture: {0}")]
     CapturePhase(InvalidCapture),
+    #[error("Parse error for branching: {0}")]
+    BranchingPhase(String),
 }
 
 /// Behaviour to capture an implicit generic type T from an input `&str`.
@@ -165,7 +167,7 @@ impl<'a> Parser<'a> {
             Err((offset, e, _)) => Err((offset, ParseError::MatchPhase(e))),
         }?;
 
-        let mut discriminee: Option<String> = None;
+        let mut discriminee: Option<OffsetValue> = None;
 
         // 2. Get the matching between tokens-parameter/options, still as raw strings.
         for match_tokens in matches.values {
@@ -187,8 +189,8 @@ impl<'a> Parser<'a> {
             if let Some(ref target) = &discriminator {
                 if target == &match_tokens.name {
                     match &match_tokens.values[..] {
-                        [(_offset, value)] => {
-                            if discriminee.replace(value.clone()).is_some() {
+                        [(offset, value)] => {
+                            if discriminee.replace((*offset, value.clone())).is_some() {
                                 unreachable!(
                                     "internal error - discriminator cannot have multiple matches"
                                 );
@@ -214,7 +216,7 @@ impl<'a> Parser<'a> {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Action {
     Continue {
-        discriminee: Option<String>,
+        discriminee: Option<OffsetValue>,
         remaining: Vec<String>,
     },
     PrintHelp,
@@ -327,13 +329,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case(vec!["1"], "1", vec![])]
-    #[case(vec!["01"], "01", vec![])]
-    #[case(vec!["1", "abc"], "1", vec!["abc"])]
-    #[case(vec!["1", "abc", "2"], "1", vec!["abc", "2"])]
-    #[case(vec!["--flag", "1"], "1", vec![])]
+    #[case(vec!["1"], 0, "1", vec![])]
+    #[case(vec!["01"], 0, "01", vec![])]
+    #[case(vec!["1", "abc"], 0, "1", vec!["abc"])]
+    #[case(vec!["1", "abc", "2"], 0, "1", vec!["abc", "2"])]
+    #[case(vec!["--flag", "1"], 6, "1", vec![])]
     fn parser_discriminator(
         #[case] tokens: Vec<&str>,
+        #[case] discriminee_offset: usize,
         #[case] discriminee_value: &str,
         #[case] expected: Vec<&str>,
     ) {
@@ -360,7 +363,7 @@ mod tests {
         assert_eq!(
             result,
             Action::Continue {
-                discriminee: Some(discriminee_value.to_string()),
+                discriminee: Some((discriminee_offset, discriminee_value.to_string())),
                 remaining: expected.into_iter().map(|s| s.to_string()).collect(),
             }
         );

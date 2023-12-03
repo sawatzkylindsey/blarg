@@ -4,7 +4,12 @@ use terminal_size::{terminal_size, Width};
 use crate::constant::*;
 use crate::model::Nargs;
 use crate::parser::interface::UserInterface;
-use crate::parser::{ColumnRenderer, LeftWidth, MiddleWidth, PaddingWidth, RightWidth, TotalWidth};
+use crate::parser::{
+    ColumnRenderer, LeftWidth, MiddleWidth, PaddingWidth, RightWidth, TotalWidth,
+    MINIMUM_MIDDLE_WIDTH,
+};
+#[cfg(feature = "debug")]
+use tracing::debug;
 
 pub(crate) struct OptionParameter {
     name: String,
@@ -96,9 +101,6 @@ pub(crate) struct Printer {
     terminal_width: Option<usize>,
 }
 
-// Let's assume the average word length is 5.
-// Then 17 is a good minimum, because it allows precisely 3 words with a space between them.
-const DEFAULT_MIDDLE_WIDTH: usize = 17;
 const PADDING_WIDTH: usize = 3;
 const MAIN_INDENT: usize = 1;
 const CHOICE_INDENT: usize = 2;
@@ -299,25 +301,36 @@ impl Printer {
         }
 
         let column_renderer = match &self.terminal_width {
-            Some(tw) => ColumnRenderer::guided(
-                PaddingWidth::new(PADDING_WIDTH).unwrap(),
-                LeftWidth::new(left_column_width.clone()).unwrap(),
-                MiddleWidth::new(middle_column_width.clone()).unwrap(),
-                right_columns_widths.clone(),
-                TotalWidth(tw.clone()),
-            ),
-            None => None,
-        };
+            Some(tw) => {
+                #[cfg(feature = "debug")]
+                {
+                    debug!("Found the terminal width: {tw}.");
+                }
 
-        // column_renderer will be None if either:
-        // * There isn't a self.terminal_width, or
-        // * The terminal width isn't big enough for all the components.
-        let column_renderer = column_renderer.unwrap_or(ColumnRenderer::new(
-            PaddingWidth::new(PADDING_WIDTH).unwrap(),
-            LeftWidth::new(left_column_width).unwrap(),
-            MiddleWidth::new(std::cmp::min(middle_column_width, DEFAULT_MIDDLE_WIDTH)).unwrap(),
-            right_columns_widths,
-        ));
+                ColumnRenderer::guided(
+                    PaddingWidth::new(PADDING_WIDTH).unwrap(),
+                    LeftWidth::new(left_column_width.clone()).unwrap(),
+                    MiddleWidth::new(middle_column_width.clone()).unwrap(),
+                    right_columns_widths.clone(),
+                    TotalWidth(tw.clone()),
+                )
+            }
+            None => {
+                #[cfg(feature = "debug")]
+                {
+                    debug!(
+                        "Could not find the terminal width - using default renderer configuration."
+                    );
+                }
+
+                ColumnRenderer::new(
+                    PaddingWidth::new(PADDING_WIDTH).unwrap(),
+                    LeftWidth::new(left_column_width).unwrap(),
+                    MiddleWidth::new(MINIMUM_MIDDLE_WIDTH).unwrap(),
+                    right_columns_widths,
+                )
+            }
+        };
 
         user_interface.print(format!(
             "usage: {p} {s}",
@@ -611,12 +624,10 @@ options:
             r#"usage: program [-h] [-f FLAG]
 
 options:
- -h, --help             Show this help
-                        message and
-                        exit.
- -f FLAG, --flag FLAG   message in a       the swift   brown fox
-                        bottle, by the
-                        police."#
+ -h, --help             Show this help message
+                        and exit.
+ -f FLAG, --flag FLAG   message in a bottle, by    the swift   brown fox
+                        the police."#
         );
     }
 
@@ -655,13 +666,10 @@ options:
             r#"usage: program [-h] [-f FLAG] [--other OTHER]
 
 options:
- -h, --help             Show this help
-                        message and
-                        exit.
- -f FLAG, --flag FLAG   message in a           brown fox
-                        bottle, by the
+ -h, --help             Show this help message and exit.
+ -f FLAG, --flag FLAG   message in a bottle, by the            brown fox
                         police.
- --other OTHER                             x   brown fox"#
+ --other OTHER                                             x   brown fox"#
         );
     }
 
@@ -691,10 +699,9 @@ options:
             r#"usage: program [-h] [-f FLAG]
 
 options:
- -h, --help             Show this help
-                        message and
-                        exit.
- -f FLAG, --flag FLAG                      the swift   brown fox"#
+ -h, --help             Show this help message
+                        and exit.
+ -f FLAG, --flag FLAG                              the swift   brown fox"#
         );
     }
 
@@ -724,8 +731,7 @@ options:
             r#"usage: program [-h] [--flag]
 
 options:
- -h, --help   Show this help message and
-              exit.
+ -h, --help   Show this help message and exit.
  --flag    "#
         );
     }
@@ -851,8 +857,7 @@ positional arguments:
  NAME         message
 
 options:
- -h, --help   Show this help message and
-              exit."#
+ -h, --help   Show this help message and exit."#
         );
     }
 
@@ -892,8 +897,7 @@ positional arguments:
    xyz          do the xyz
 
 options:
- -h, --help   Show this help message and
-              exit."#
+ -h, --help   Show this help message and exit."#
         );
     }
 
@@ -922,14 +926,12 @@ options:
             r#"usage: program [-h] NAME
 
 positional arguments:
- NAME         message in a       the swift   brown fox
-              bottle, by the
-              police.
+ NAME         message in a bottle,     the swift   brown fox
+              by the police.
 
 options:
- -h, --help   Show this help
-              message and
-              exit."#
+ -h, --help   Show this help message
+              and exit."#
         );
     }
 
@@ -966,14 +968,12 @@ options:
             r#"usage: program [-h] NAME OTHER
 
 positional arguments:
- NAME         message in a           brown fox
-              bottle, by the
+ NAME         message in a bottle, by the          brown fox
               police.
- OTHER                           x   brown fox
+ OTHER                                         x   brown fox
 
 options:
- -h, --help   Show this help
-              message and
+ -h, --help   Show this help message and
               exit."#
         );
     }
@@ -1038,8 +1038,7 @@ positional arguments:
  NAME NAME 
 
 options:
- -h, --help   Show this help message and
-              exit."#
+ -h, --help   Show this help message and exit."#
         );
     }
 
@@ -1071,8 +1070,7 @@ positional arguments:
  NAME [...]
 
 options:
- -h, --help   Show this help message and
-              exit."#
+ -h, --help   Show this help message and exit."#
         );
     }
 
@@ -1104,8 +1102,7 @@ positional arguments:
  [NAME ...]
 
 options:
- -h, --help   Show this help message and
-              exit."#
+ -h, --help   Show this help message and exit."#
         );
     }
 

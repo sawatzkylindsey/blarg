@@ -61,10 +61,10 @@ Check out the rustdoc for more information.
     usage: example [-h] [-v] VALUE
     
     positional arguments:
-     VALUE
+     VALUE                                              type: u32
     
     options:
-     -h, --help     Show this help message and exit.
+     -h, --help      Show this help message and exit.
      -v, --verbose
 
 ### Development

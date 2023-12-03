@@ -1,6 +1,9 @@
 use crate::parser::base::ParseError;
 use crate::parser::ErrorContext;
 
+#[cfg(feature = "debug")]
+use tracing::debug;
+
 #[derive(Debug)]
 pub(crate) struct PaddingWidth(usize);
 
@@ -72,17 +75,23 @@ pub(crate) struct ColumnRenderer {
     rights: Vec<RightWidth>,
 }
 
+// We'll target 95% of the total width, to ensure the renderer doesn't literally use the full space.
+const TARGET_TOTAL_FACTOR: f64 = 0.95;
+
+// Let's assume the average word length is 5.
+// Then 17 is a good minimum, because it allows precisely 3 words with a space between them.
+pub(crate) const MINIMUM_MIDDLE_WIDTH: usize = 17;
+
 impl ColumnRenderer {
     /// Produce a renderer based off the provided widths.
-    /// This renderer will use a simple heuristic to chose the middle width.
-    /// If the widths {left, heuristic(middle), rights, appropriate(padding)} do not fit within the total, then a `None` is returned.
+    /// This renderer will use a heuristic to chose the middle width.
     pub(crate) fn guided(
         padding: PaddingWidth,
         left: LeftWidth,
         middle: MiddleWidth,
         rights: Vec<RightWidth>,
         total_width: TotalWidth,
-    ) -> Option<Self> {
+    ) -> Self {
         // We always have a left and a middle (and a padding between them).
         let mut non_middle: usize = &left.0 + &padding.0;
 
@@ -92,12 +101,31 @@ impl ColumnRenderer {
                 + ((rights.len() - 1) * &padding.0);
         }
 
-        let guided_middle = std::cmp::min(middle.0, ((non_middle as f64) * 2.5) as usize);
+        let target_total_width = (total_width.0 as f64 * TARGET_TOTAL_FACTOR) as usize;
+        let guided_middle = std::cmp::max(middle.0, MINIMUM_MIDDLE_WIDTH);
 
-        if guided_middle + non_middle <= total_width.0 {
-            Some(Self::new(padding, left, MiddleWidth(guided_middle), rights))
+        if guided_middle + non_middle <= target_total_width {
+            #[cfg(feature = "debug")]
+            {
+                debug!("Columns {non_middle} and middle fit within the target total {target_total_width}.  Selecting middle: {guided_middle}.");
+            }
+
+            Self::new(padding, left, MiddleWidth(guided_middle), rights)
+        } else if non_middle < total_width.0 {
+            let calculated_middle = std::cmp::max(total_width.0 - non_middle, MINIMUM_MIDDLE_WIDTH);
+            #[cfg(feature = "debug")]
+            {
+                debug!("Columns {non_middle} fits within the total {total_width}.  Selecting middle: {calculated_middle}.");
+            }
+
+            Self::new(padding, left, MiddleWidth(calculated_middle), rights)
         } else {
-            None
+            #[cfg(feature = "debug")]
+            {
+                debug!("Columns {non_middle} do not fit within the total {total_width}.  Selecting middle: {MINIMUM_MIDDLE_WIDTH}.");
+            }
+
+            Self::new(padding, left, MiddleWidth(MINIMUM_MIDDLE_WIDTH), rights)
         }
     }
 
@@ -801,60 +829,175 @@ mod tests {
 
     #[test]
     fn column_renderer_guided() {
+        //
+        // When the total width is too short (for even the non middle).
+        //
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(2).unwrap(),
+            vec![],
+            TotalWidth(7),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        //
+        // When the total width is too short (for it all).
+        //
         let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
             MiddleWidth::new(2).unwrap(),
             vec![],
             TotalWidth(15),
-        )
-        .unwrap();
-        assert_eq!(cr.middle.0, 2);
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
 
         let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
-            MiddleWidth::new(8).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 1).unwrap(),
             vec![],
             TotalWidth(15),
-        )
-        .unwrap();
-        assert_eq!(cr.middle.0, 8);
-        let optional = ColumnRenderer::guided(
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        //
+        // When the total width is just right.
+        //
+        let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
-            MiddleWidth::new(8).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH).unwrap(),
             vec![],
-            TotalWidth(14),
+            TotalWidth(26),
         );
-        assert!(optional.is_none());
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
 
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 1).unwrap(),
+            vec![],
+            TotalWidth(27),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 1);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 2).unwrap(),
+            vec![],
+            TotalWidth(27),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 3);
+
+        //
+        // When the total width is too long.
+        //
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH).unwrap(),
+            vec![],
+            TotalWidth(50),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 10).unwrap(),
+            vec![],
+            TotalWidth(50),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 10);
+    }
+
+    #[test]
+    fn column_renderer_guided_right() {
+        //
+        // When the total width is too short (for even the non middle).
+        //
         let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
             MiddleWidth::new(2).unwrap(),
             vec![RightWidth::new(1).unwrap()],
-            TotalWidth(18),
-        )
-        .unwrap();
-        assert_eq!(cr.middle.0, 2);
+            TotalWidth(10),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        //
+        // When the total width is too short (for it all).
+        //
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(2).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(15),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
 
         let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
-            MiddleWidth::new(8).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 1).unwrap(),
             vec![RightWidth::new(1).unwrap()],
-            TotalWidth(18),
-        )
-        .unwrap();
-        assert_eq!(cr.middle.0, 8);
-        let optional = ColumnRenderer::guided(
+            TotalWidth(15),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        //
+        // When the total width is just right.
+        //
+        let cr = ColumnRenderer::guided(
             PaddingWidth::new(2).unwrap(),
             LeftWidth::new(5).unwrap(),
-            MiddleWidth::new(8).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH).unwrap(),
             vec![RightWidth::new(1).unwrap()],
-            TotalWidth(17),
+            TotalWidth(29),
         );
-        assert!(optional.is_none());
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 1).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(30),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 1);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 2).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(30),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 3);
+
+        //
+        // When the total width is too long.
+        //
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(50),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH);
+
+        let cr = ColumnRenderer::guided(
+            PaddingWidth::new(2).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(MINIMUM_MIDDLE_WIDTH + 10).unwrap(),
+            vec![RightWidth::new(1).unwrap()],
+            TotalWidth(50),
+        );
+        assert_eq!(cr.middle.0, MINIMUM_MIDDLE_WIDTH + 10);
     }
 }

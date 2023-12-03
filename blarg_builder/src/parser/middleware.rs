@@ -78,7 +78,11 @@ impl<'a> ParseUnit<'a> {
                 discriminee,
                 remaining,
             }) => match discriminee {
-                Some(variant) => ParseResult::Incomplete { variant, remaining },
+                Some((offset, variant)) => ParseResult::Incomplete {
+                    variant_offset: offset,
+                    variant,
+                    remaining,
+                },
                 None => ParseResult::Complete,
             },
             Ok(Action::PrintHelp) => {
@@ -98,6 +102,7 @@ impl<'a> ParseUnit<'a> {
 enum ParseResult {
     Complete,
     Incomplete {
+        variant_offset: usize,
         variant: String,
         remaining: Vec<String>,
     },
@@ -120,9 +125,9 @@ impl<'a> GeneralParser<'a> {
     /// If the help switch (`-h` or `--help`) is encountered, the parser will display the help message and return with `Err(0)`.
     /// This skips the phase #2 capturing.
     ///
-    /// In the case of a sub-command based command line parser, this process is repeated twice.
-    /// Once for the root command line parser, and a second time for the matched sub-command.
-    /// The input tokens are partitioned based off the `Condition` parameter.
+    /// In the case of a sub-command based parser, a third phase is introduced where the parser is branched into the sub-command.
+    /// After branching, the token matching and token capturing phases are repeated for the sub-command.
+    /// In effect, the input tokens are partitioned based off the branching `Condition`.
     pub fn parse_tokens(self, tokens: &[&str]) -> Result<(), i32> {
         let GeneralParser {
             program,
@@ -134,7 +139,11 @@ impl<'a> GeneralParser<'a> {
 
         match command_result {
             ParseResult::Complete => Ok(()),
-            ParseResult::Incomplete { variant, remaining } => {
+            ParseResult::Incomplete {
+                variant_offset,
+                variant,
+                remaining,
+            } => {
                 match sub_commands.remove(&variant) {
                     Some(sub_command) => {
                         match sub_command.invoke(
@@ -157,8 +166,12 @@ impl<'a> GeneralParser<'a> {
                     }
                     None => {
                         // The variant isn't amongst the sub-commands.
-                        // This is impossible, since we check the FromStr/Display invariant while building the parser.
-                        unreachable!("internal error - sub-command variant must exist.")
+                        user_interface.print_error(ParseError::BranchingPhase(format!(
+                            "unknown sub-command '{variant}'."
+                        )));
+                        user_interface
+                            .print_error_context(ErrorContext::new(variant_offset, tokens));
+                        Err(1)
                     }
                 }
             }
@@ -181,9 +194,9 @@ impl<'a> GeneralParser<'a> {
     /// If the help switch (`-h` or `--help`) is encountered, the parser will display the help message and exit with error code `0`.
     /// This skips the phase #2 capturing.
     ///
-    /// In the case of a sub-command based command line parser, this process is repeated twice.
-    /// Once for the root command line parser, and a second time for the matched sub-command.
-    /// The input tokens are partitioned based off the `Condition` parameter.
+    /// In the case of a sub-command based parser, a third phase is introduced where the parser is branched into the sub-command.
+    /// After branching, the token matching and token capturing phases are repeated for the sub-command.
+    /// In effect, the input tokens are partitioned based off the branching `Condition`.
     pub fn parse(self) {
         let command_input: Vec<String> = env::args().skip(1).collect();
         match self.parse_tokens(
@@ -212,17 +225,18 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(vec!["1"], "1", vec![])]
-    #[case(vec!["01"], "01", vec![])]
-    #[case(vec!["--flag", "1"], "1", vec![])]
-    #[case(vec!["1", "a"], "1", vec!["a"])]
-    #[case(vec!["01", "a"], "01", vec!["a"])]
-    #[case(vec!["--flag", "1", "a"], "1", vec!["a"])]
-    #[case(vec!["1", "a", "--abc=123"], "1", vec!["a", "--abc=123"])]
-    #[case(vec!["01", "a", "--abc=123"], "01", vec!["a", "--abc=123"])]
-    #[case(vec!["--flag", "1", "a", "--abc=123"], "1", vec!["a", "--abc=123"])]
+    #[case(vec!["1"], 0, "1", vec![])]
+    #[case(vec!["01"], 0, "01", vec![])]
+    #[case(vec!["--flag", "1"], 6, "1", vec![])]
+    #[case(vec!["1", "a"], 0, "1", vec!["a"])]
+    #[case(vec!["01", "a"], 0, "01", vec!["a"])]
+    #[case(vec!["--flag", "1", "a"], 6, "1", vec!["a"])]
+    #[case(vec!["1", "a", "--abc=123"], 0, "1", vec!["a", "--abc=123"])]
+    #[case(vec!["01", "a", "--abc=123"], 0, "01", vec!["a", "--abc=123"])]
+    #[case(vec!["--flag", "1", "a", "--abc=123"], 6, "1", vec!["a", "--abc=123"])]
     fn invoke_discriminator(
         #[case] tokens: Vec<&str>,
+        #[case] offset: usize,
         #[case] discriminee: &str,
         #[case] remaining: Vec<&str>,
     ) {
@@ -249,6 +263,7 @@ mod tests {
         assert_eq!(
             result,
             ParseResult::Incomplete {
+                variant_offset: offset,
                 variant: discriminee.to_string(),
                 remaining: remaining.into_iter().map(|s| s.to_string()).collect(),
             }
@@ -559,5 +574,45 @@ mod tests {
         assert_contains!(error, "Parse error");
         let error_context = error_context.unwrap();
         assert_eq!(error_context, ErrorContext::new(offset, &context));
+    }
+
+    #[rstest]
+    #[case(vec!["1"], 0)]
+    #[case(vec!["01"], 0)]
+    #[case(vec!["--flag", "1"], 6)]
+    fn sub_command_not_found(#[case] tokens: Vec<&str>, #[case] offset: usize) {
+        // Setup
+        let parse_unit = ParseUnit::new(
+            Parser::new(
+                vec![(
+                    OptionConfig::new("flag", None, Bound::Range(0, 0)),
+                    Box::new(BlackHole::default()),
+                )],
+                vec![(
+                    ArgumentConfig::new("variable", Bound::Range(1, 1)),
+                    Box::new(BlackHole::default()),
+                )],
+                Some("variable".to_string()),
+            )
+            .unwrap(),
+            Printer::empty(),
+        );
+        let sub_commands = HashMap::default();
+        let (sender, receiver) = channel_interface();
+        let general_parser =
+            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+
+        // Execute
+        let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
+
+        // Verify
+        assert_eq!(error_code, 1);
+
+        let (message, error, error_context) = receiver.consume();
+        assert_eq!(message, None);
+        let error = error.unwrap();
+        assert_contains!(error, "unknown sub-command");
+        let error_context = error_context.unwrap();
+        assert_eq!(error_context, ErrorContext::new(offset, &tokens));
     }
 }
