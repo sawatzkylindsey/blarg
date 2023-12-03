@@ -30,6 +30,18 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
             }
             None => quote! { env!("CARGO_CRATE_NAME") },
         };
+        let about = match attributes.pairs.get("about") {
+            Some(values) => {
+                let tokens = &values
+                    .first()
+                    .expect("attribute pair 'about' must contain non-empty values")
+                    .tokens;
+                Some(DeriveValue {
+                    tokens: quote! { #tokens },
+                })
+            }
+            None => None,
+        };
         let initializer = match attributes.pairs.get("initializer") {
             Some(values) => {
                 let tokens = &values
@@ -93,6 +105,7 @@ impl TryFrom<syn::DeriveInput> for DeriveParser {
                     program: DeriveValue {
                         tokens: program.into(),
                     },
+                    about,
                     initializer: DeriveValue {
                         tokens: initializer.into(),
                     },
@@ -121,6 +134,18 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
             }
         }
 
+        let about = match attributes.pairs.get("about") {
+            Some(values) => {
+                let tokens = &values
+                    .first()
+                    .expect("attribute pair 'about' must contain non-empty values")
+                    .tokens;
+                Some(DeriveValue {
+                    tokens: quote! { #tokens },
+                })
+            }
+            None => None,
+        };
         let parser_name = &value.ident;
 
         let hints = if attributes.singletons.contains("hints_off") {
@@ -171,6 +196,7 @@ impl TryFrom<syn::DeriveInput> for DeriveSubParser {
 
                 let cli_sub_parser = DeriveSubParser {
                     struct_name: parser_name.clone(),
+                    about,
                     parameters,
                     hints,
                 };
@@ -217,6 +243,7 @@ mod tests {
                 program: DeriveValue {
                     tokens: quote! { env!("CARGO_CRATE_NAME") }
                 },
+                about: None,
                 initializer: DeriveValue {
                     tokens: quote! { default }.into_token_stream()
                 },
@@ -250,6 +277,7 @@ mod tests {
                 program: DeriveValue {
                     tokens: quote! { env!("CARGO_CRATE_NAME") }
                 },
+                about: None,
                 initializer: DeriveValue {
                     tokens: quote! { default }.into_token_stream()
                 },
@@ -271,7 +299,7 @@ mod tests {
         let input: syn::DeriveInput = syn::parse_str(
             r#"
                 #[derive(Default, BlargParser)]
-                #[blarg(program = "abc", initializer = qwerty, hints_off)]
+                #[blarg(program = "abc", initializer = qwerty, hints_off, about = "def 123")]
                 struct Parameters {
                     apple: usize,
                 }
@@ -290,6 +318,9 @@ mod tests {
                 program: DeriveValue {
                     tokens: Literal::string("abc").into_token_stream()
                 },
+                about: Some(DeriveValue {
+                    tokens: Literal::string("def 123").into_token_stream()
+                }),
                 initializer: DeriveValue {
                     tokens: quote! { qwerty }.into_token_stream()
                 },
@@ -395,6 +426,7 @@ mod tests {
             derive_sub_parser,
             DeriveSubParser {
                 struct_name: ident("Parameters"),
+                about: None,
                 parameters: Vec::default(),
                 hints: Hints::On,
             }
@@ -422,6 +454,7 @@ mod tests {
             derive_sub_parser,
             DeriveSubParser {
                 struct_name: ident("Parameters"),
+                about: None,
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     from_str_type: "usize".to_string(),
@@ -440,7 +473,7 @@ mod tests {
         let input: syn::DeriveInput = syn::parse_str(
             r#"
                 #[derive(Default, BlargSubParser)]
-                #[blarg(hints_off)]
+                #[blarg(hints_off, about = "def 123")]
                 struct Parameters {
                     apple: usize,
                 }
@@ -456,6 +489,9 @@ mod tests {
             derive_sub_parser,
             DeriveSubParser {
                 struct_name: ident("Parameters"),
+                about: Some(DeriveValue {
+                    tokens: Literal::string("def 123").into_token_stream()
+                }),
                 parameters: vec![DeriveParameter {
                     field_name: ident("apple"),
                     from_str_type: "usize".to_string(),

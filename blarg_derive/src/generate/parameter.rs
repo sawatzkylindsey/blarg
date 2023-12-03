@@ -50,7 +50,6 @@ impl DeriveParameter {
                 (
                     None,
                     quote! {
-
                         Parameter::option(Scalar::new(&mut #parent.#field_name), #field_name_str, #short)
                     },
                     None,

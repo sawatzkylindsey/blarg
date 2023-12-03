@@ -53,6 +53,7 @@ impl Parameters {
 }
 
 #[derive(Debug, Default, BlargSubParser)]
+#[blarg(about = "Do sub-foo type things.")]
 struct SubFoo {
     value: String,
 }
@@ -64,6 +65,7 @@ impl SubFoo {
 }
 
 #[derive(Debug, Default, BlargSubParser)]
+#[blarg(about = "Do sub-bar type things.")]
 struct SubBar {
     #[blarg(help = "my special value")]
     value: String,

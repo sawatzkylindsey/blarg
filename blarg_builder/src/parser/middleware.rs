@@ -9,7 +9,6 @@ use crate::parser::ErrorContext;
 /// The configured command line parser.
 /// Built via [`CommandLineParser::build`](./struct.CommandLineParser.html#method.build) or [`SubCommandParser::build`](./struct.SubCommandParser.html#method.build).
 pub struct GeneralParser<'a> {
-    program: String,
     command: ParseUnit<'a>,
     sub_commands: HashMap<String, ParseUnit<'a>>,
     user_interface: Box<dyn UserInterface>,
@@ -22,13 +21,8 @@ impl<'a> std::fmt::Debug for GeneralParser<'a> {
 }
 
 impl<'a> GeneralParser<'a> {
-    pub(crate) fn command(
-        program: impl Into<String>,
-        command: ParseUnit<'a>,
-        user_interface: Box<dyn UserInterface>,
-    ) -> Self {
+    pub(crate) fn command(command: ParseUnit<'a>, user_interface: Box<dyn UserInterface>) -> Self {
         Self {
-            program: program.into(),
             command,
             sub_commands: HashMap::default(),
             user_interface,
@@ -36,13 +30,11 @@ impl<'a> GeneralParser<'a> {
     }
 
     pub(crate) fn sub_command(
-        program: impl Into<String>,
         command: ParseUnit<'a>,
         sub_commands: HashMap<String, ParseUnit<'a>>,
         user_interface: Box<dyn UserInterface>,
     ) -> Self {
         Self {
-            program: program.into(),
             command,
             sub_commands,
             user_interface,
@@ -68,7 +60,6 @@ impl<'a> ParseUnit<'a> {
     fn invoke(
         self,
         tokens: &[&str],
-        program: impl Into<String>,
         user_interface: &(impl UserInterface + ?Sized),
     ) -> ParseResult {
         let ParseUnit { parser, printer } = self;
@@ -86,7 +77,7 @@ impl<'a> ParseUnit<'a> {
                 None => ParseResult::Complete,
             },
             Ok(Action::PrintHelp) => {
-                printer.print_help(program, user_interface);
+                printer.print_help(user_interface);
                 ParseResult::Exit(0)
             }
             Err((offset, parse_error)) => {
@@ -110,6 +101,24 @@ enum ParseResult {
 }
 
 impl<'a> GeneralParser<'a> {
+    #[cfg(test)]
+    pub fn details(&self) -> (String, Option<String>) {
+        (
+            self.command.printer.program.clone(),
+            self.command.printer.about.clone(),
+        )
+    }
+
+    #[cfg(test)]
+    pub fn sub_details(&self, variant: &str) -> Option<(String, Option<String>)> {
+        self.sub_commands.get(variant).map(|parse_unit| {
+            (
+                parse_unit.printer.program.clone(),
+                parse_unit.printer.about.clone(),
+            )
+        })
+    }
+
     /// Run the command line parser against the input tokens.
     /// Help messages are printed on `stdout`, while error messages are printed on `stderr`.
     ///
@@ -130,12 +139,11 @@ impl<'a> GeneralParser<'a> {
     /// In effect, the input tokens are partitioned based off the branching `Condition`.
     pub fn parse_tokens(self, tokens: &[&str]) -> Result<(), i32> {
         let GeneralParser {
-            program,
             command,
             mut sub_commands,
             user_interface,
         } = self;
-        let command_result = command.invoke(tokens, program.clone(), &*user_interface);
+        let command_result = command.invoke(tokens, &*user_interface);
 
         match command_result {
             ParseResult::Complete => Ok(()),
@@ -152,7 +160,6 @@ impl<'a> GeneralParser<'a> {
                                 .map(AsRef::as_ref)
                                 .collect::<Vec<&str>>()
                                 .as_slice(),
-                            format!("{program} {variant}"),
                             &*user_interface,
                         ) {
                             ParseResult::Complete => Ok(()),
@@ -257,7 +264,7 @@ mod tests {
         let interface = InMemoryInterface::default();
 
         // Execute
-        let result = parse_unit.invoke(tokens.as_slice(), "program", &interface);
+        let result = parse_unit.invoke(tokens.as_slice(), &interface);
 
         // Verify
         assert_eq!(
@@ -279,8 +286,7 @@ mod tests {
     fn parse_tokens_empty() {
         // Setup
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::command("program", ParseUnit::empty(), Box::new(sender));
+        let general_parser = GeneralParser::command(ParseUnit::empty(), Box::new(sender));
 
         // Execute
         general_parser.parse_tokens(empty::slice()).unwrap();
@@ -314,7 +320,7 @@ mod tests {
             Printer::empty(),
         );
         let (sender, receiver) = channel_interface();
-        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
+        let general_parser = GeneralParser::command(parse_unit, Box::new(sender));
 
         // Execute
         general_parser.parse_tokens(tokens.as_slice()).unwrap();
@@ -333,7 +339,7 @@ mod tests {
         // Setup
         let parse_unit = ParseUnit::empty();
         let (sender, receiver) = channel_interface();
-        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
+        let general_parser = GeneralParser::command(parse_unit, Box::new(sender));
 
         // Execute
         let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
@@ -342,7 +348,7 @@ mod tests {
         assert_eq!(error_code, 0);
 
         let message = receiver.consume_message();
-        assert_contains!(message, "usage: program [-h]");
+        assert_contains!(message, "usage: EMPTY [-h]");
         assert_contains!(message, "-h, --help");
     }
 
@@ -369,7 +375,7 @@ mod tests {
             Printer::empty(),
         );
         let (sender, receiver) = channel_interface();
-        let general_parser = GeneralParser::command("program", parse_unit, Box::new(sender));
+        let general_parser = GeneralParser::command(parse_unit, Box::new(sender));
 
         // Execute
         let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
@@ -407,8 +413,7 @@ mod tests {
         );
         let sub_commands = HashMap::from([("1".to_string(), ParseUnit::empty())]);
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+        let general_parser = GeneralParser::sub_command(parse_unit, sub_commands, Box::new(sender));
 
         // Execute
         general_parser.parse_tokens(tokens.as_slice()).unwrap();
@@ -461,8 +466,7 @@ mod tests {
             ),
         )]);
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+        let general_parser = GeneralParser::sub_command(parse_unit, sub_commands, Box::new(sender));
 
         // Execute
         general_parser.parse_tokens(tokens.as_slice()).unwrap();
@@ -498,8 +502,7 @@ mod tests {
         );
         let sub_commands = HashMap::from([("1".to_string(), ParseUnit::empty())]);
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+        let general_parser = GeneralParser::sub_command(parse_unit, sub_commands, Box::new(sender));
 
         // Execute
         let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
@@ -508,7 +511,7 @@ mod tests {
         assert_eq!(error_code, 0);
 
         let message = receiver.consume_message();
-        assert_contains!(message, "usage: program 1 [-h]");
+        assert_contains!(message, "usage: EMPTY [-h]");
         assert_contains!(message, "-h, --help");
     }
 
@@ -559,8 +562,7 @@ mod tests {
             ),
         )]);
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+        let general_parser = GeneralParser::sub_command(parse_unit, sub_commands, Box::new(sender));
 
         // Execute
         let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();
@@ -599,8 +601,7 @@ mod tests {
         );
         let sub_commands = HashMap::default();
         let (sender, receiver) = channel_interface();
-        let general_parser =
-            GeneralParser::sub_command("program", parse_unit, sub_commands, Box::new(sender));
+        let general_parser = GeneralParser::sub_command(parse_unit, sub_commands, Box::new(sender));
 
         // Execute
         let error_code = general_parser.parse_tokens(tokens.as_slice()).unwrap_err();

@@ -144,6 +144,14 @@ impl ColumnRenderer {
         }
     }
 
+    pub(crate) fn combined_render(&self, indent: usize, left_and_middle: &str) -> Vec<String> {
+        let combined_width = &self.left.0 + &self.padding.0 + &self.middle.0 - indent;
+        chunk(left_and_middle, combined_width)
+            .into_iter()
+            .map(|part| format!("{:indent$}{part}", ""))
+            .collect()
+    }
+
     pub(crate) fn render(
         &self,
         indent: usize,
@@ -454,6 +462,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn column_renderer_combined() {
+        let cr = ColumnRenderer::new(
+            PaddingWidth::new(4).unwrap(),
+            LeftWidth::new(5).unwrap(),
+            MiddleWidth::new(23).unwrap(),
+            vec![],
+        );
+
+        assert_eq!(cr.combined_render(0, "abc"), vec!["abc".to_string()]);
+        assert_eq!(
+            cr.combined_render(0, "abc 123456 something pieces full"),
+            vec!["abc 123456 something pieces full".to_string()]
+        );
+        assert_eq!(
+            cr.combined_render(0, "abc 123456 something pieces full more stuff"),
+            vec![
+                "abc 123456 something pieces full".to_string(),
+                "more stuff".to_string(),
+            ]
+        );
+
+        assert_eq!(cr.combined_render(1, "abc"), vec![" abc".to_string()]);
+        assert_eq!(
+            cr.combined_render(1, "abc 12345 something pieces full"),
+            vec![" abc 12345 something pieces full".to_string()]
+        );
+        assert_eq!(
+            cr.combined_render(1, "abc 123456 something pieces full more stuff"),
+            vec![
+                " abc 123456 something pieces".to_string(),
+                " full more stuff".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn column_renderer_simple() {
         let cr = ColumnRenderer::new(
             PaddingWidth::new(4).unwrap(),
@@ -472,8 +516,8 @@ mod tests {
         );
 
         assert_eq!(
-            cr.render(0, "abc12", "something pieces full", &vec![]),
-            vec!["abc12    something pieces full".to_string()]
+            cr.render(0, "abc12", "something pieces fullxy", &vec![]),
+            vec!["abc12    something pieces fullxy".to_string()]
         );
         assert_eq!(
             cr.render(0, "abc", "something pieces full more stuff", &vec![]),

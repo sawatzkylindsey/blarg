@@ -5,7 +5,7 @@ use blarg::{
 };
 
 #[derive(Debug, BlargParser)]
-#[blarg(program = "edgy", initializer = initial)]
+#[blarg(program = "edgy", initializer = initial, about = "this is my about message")]
 struct Parameters {
     #[blarg(option)]
     items: Vec<usize>,

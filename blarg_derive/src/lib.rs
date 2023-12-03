@@ -19,13 +19,15 @@ pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 /// Supports the following struct attributes:
 /// * `#[blarg(program = "..")]` explicitly sets the name of your Cli program.
 /// When unspecified, defaults to the name of the cargo crate.
+/// * `#[blarg(about = "..")]` defines the about message for your Cli program.
+/// This value is passed directly into the (["about" documentation](../struct.CommandLineParser.html#method.about)).
 /// * `#[blarg(initializer = F)]` instructs `blarg` to use the initializer method `F`.
 /// This allows for a separation between the `Default` method vs. *initial* values of the struct, which follows from `blargs`'s stance on [default & initials](../index.html#defaults--initials).
 /// When unspecified, `blarg` falls back to the initializer method `default`.
 /// * `#[blarg(hints_off)]` disables the type/initial documentation hints.
 /// When unspecified, `blarg` automatically generates type/initial documentation via the "meta" documentation mechanism ([parameter meta](../struct.Parameter.html#method.meta) or [condition meta](../struct.Condition.html#method.meta)).
 ///
-/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the field semantics of this struct.
+/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the parameter semantics of this struct.
 /// Supports:
 /// * `#[blarg(argument)] or #[blarg(option)]`
 /// * `#[blarg(short = C)]`
@@ -41,7 +43,8 @@ pub(crate) const MACRO_BLARG_PARSER: &str = "BlargParser";
 /// ### Example
 /// ```ignore
 /// #[derive(BlargParser)]
-/// #[blarg(program = "my-program", initializer = init, hints_off)]
+/// #[blarg(program = "my-program", initializer = init, hints_off,
+///     about = "my long program description")]
 /// struct MyCli {
 /// }
 ///
@@ -73,12 +76,14 @@ pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
 /// The derive macro which turns a struct into a `SubCommandParser`.
 ///
 /// Supports the following struct attributes:
+/// * `#[blarg(about = "..")]` defines the about message for your Cli sub-command.
+/// This value is passed directly into the (["about" documentation](../struct.SubCommand.html#method.about)).
 /// * `#[blarg(hints_off)]` disables the type/initial documentation hints.
 /// When unspecified, `blarg` automatically generates type/initial documentation via the "meta" documentation mechanism ([parameter meta](../struct.Parameter.html#method.meta) or [condition meta](../struct.Condition.html#method.meta)).
 ///
 /// Additionally, take note: the *initializer* method is inherited from that of the [`BlargParser`].
 ///
-/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the field semantics of this struct.
+/// Refer to [parameter configuration](../derive/index.html#parameter-configuration) to configure the parameter semantics of this struct.
 /// Supports:
 /// * `#[blarg(argument)] or #[blarg(option)]`
 /// * `#[blarg(short = C)]`
@@ -93,7 +98,7 @@ pub(crate) const MACRO_BLARG_SUB_PARSER: &str = "BlargSubParser";
 /// ### Example
 /// ```ignore
 /// #[derive(BlargSubParser)]
-/// #[blarg(hints_off)]
+/// #[blarg(hints_off, about = "my long sub-command description")]
 /// struct MySubCli {
 /// }
 ///

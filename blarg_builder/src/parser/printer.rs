@@ -96,6 +96,8 @@ impl ArgumentParameter {
 }
 
 pub(crate) struct Printer {
+    pub(crate) program: String,
+    pub(crate) about: Option<String>,
     options: Vec<OptionParameter>,
     arguments: Vec<ArgumentParameter>,
     terminal_width: Option<usize>,
@@ -108,10 +110,18 @@ const CHOICE_INDENT: usize = 2;
 impl Printer {
     #[cfg(test)]
     pub(crate) fn empty() -> Self {
-        Self::new(Vec::default(), Vec::default(), None)
+        Self::new(
+            "EMPTY".to_string(),
+            None,
+            Vec::default(),
+            Vec::default(),
+            None,
+        )
     }
 
     pub(crate) fn terminal(
+        program: String,
+        about: Option<String>,
         options: Vec<OptionParameter>,
         arguments: Vec<ArgumentParameter>,
     ) -> Self {
@@ -121,27 +131,27 @@ impl Printer {
             None
         };
 
-        Self::new(options, arguments, terminal_width)
+        Self::new(program, about, options, arguments, terminal_width)
     }
 
     pub(crate) fn new(
+        program: impl Into<String>,
+        about: Option<String>,
         mut options: Vec<OptionParameter>,
         arguments: Vec<ArgumentParameter>,
         terminal_width: Option<usize>,
     ) -> Self {
         options.sort_by(|a, b| a.name.cmp(&b.name));
         Self {
+            program: program.into(),
+            about,
             options,
             arguments,
             terminal_width,
         }
     }
 
-    pub(crate) fn print_help(
-        &self,
-        program: impl Into<String>,
-        user_interface: &(impl UserInterface + ?Sized),
-    ) {
+    pub(crate) fn print_help(&self, user_interface: &(impl UserInterface + ?Sized)) {
         let help_flags = format!("-{HELP_SHORT}, --{HELP_NAME}");
         let mut summary = vec![format!("[-{HELP_SHORT}]")];
         let mut left_column_width = help_flags.len();
@@ -334,9 +344,15 @@ impl Printer {
 
         user_interface.print(format!(
             "usage: {p} {s}",
-            p = program.into(),
+            p = self.program,
             s = summary.join(" ")
         ));
+
+        if let Some(about) = &self.about {
+            for line in column_renderer.combined_render(MAIN_INDENT, &about) {
+                user_interface.print(line);
+            }
+        }
 
         if !self.arguments.is_empty() {
             user_interface.print("".to_string());
@@ -513,13 +529,13 @@ mod tests {
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
         assert_eq!(
             message,
-            r#"usage: program [-h]
+            r#"usage: EMPTY [-h]
 
 options:
  -h, --help   Show this help
@@ -532,6 +548,8 @@ options:
     fn print_help_option() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 Some('f'),
@@ -545,7 +563,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -563,6 +581,8 @@ options:
     fn print_help_option_choices() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::new(
                 "flag".to_string(),
                 Some('f'),
@@ -581,7 +601,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -602,6 +622,8 @@ options:
     fn print_help_option_meta() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 Some('f'),
@@ -615,7 +637,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -635,6 +657,8 @@ options:
     fn print_help_option_meta_with_empty() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![
                 OptionParameter::basic(
                     "flag".to_string(),
@@ -657,7 +681,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -677,6 +701,8 @@ options:
     fn print_help_option_meta_without_help() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 Some('f'),
@@ -690,7 +716,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -709,6 +735,8 @@ options:
     fn print_help_option_precisely0() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 None,
@@ -722,7 +750,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -740,6 +768,8 @@ options:
     fn print_help_option_precisely2() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 None,
@@ -753,7 +783,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -771,6 +801,8 @@ options:
     fn print_help_option_atleastone() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 None,
@@ -784,7 +816,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -802,6 +834,8 @@ options:
     fn print_help_option_any() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "flag".to_string(),
                 None,
@@ -815,7 +849,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -833,6 +867,8 @@ options:
     fn print_help_argument() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -845,7 +881,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -865,6 +901,8 @@ options:
     fn print_help_argument_choices() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::new(
                 "name".to_string(),
@@ -882,7 +920,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -905,6 +943,8 @@ options:
     fn print_help_argument_meta() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -917,7 +957,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -939,6 +979,8 @@ options:
     fn print_help_argument_meta_with_empty() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![
                 ArgumentParameter::basic(
@@ -959,7 +1001,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -982,6 +1024,8 @@ options:
     fn print_help_argument_meta_without_help() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -994,7 +1038,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1014,6 +1058,8 @@ options:
     fn print_help_argument_precisely2() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -1026,7 +1072,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1046,6 +1092,8 @@ options:
     fn print_help_argument_atleastone() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -1058,7 +1106,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1078,6 +1126,8 @@ options:
     fn print_help_argument_any() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             Vec::default(),
             vec![ArgumentParameter::basic(
                 "name".to_string(),
@@ -1090,7 +1140,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1110,6 +1160,8 @@ options:
     fn print_help() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![
                 OptionParameter::basic(
                     "car-park".to_string(),
@@ -1152,7 +1204,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1176,6 +1228,8 @@ options:
     fn print_help_choices_from_option() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![
                 OptionParameter::basic(
                     "blue".to_string(),
@@ -1215,7 +1269,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();
@@ -1239,6 +1293,8 @@ options:
     fn print_help_choices_from_argument() {
         // Setup
         let printer = Printer::new(
+            "program",
+            None,
             vec![OptionParameter::basic(
                 "blue".to_string(),
                 Some('y'),
@@ -1269,7 +1325,7 @@ options:
         let interface = InMemoryInterface::default();
 
         // Execute
-        printer.print_help("program", &interface);
+        printer.print_help(&interface);
 
         // Verify
         let message = interface.consume_message();

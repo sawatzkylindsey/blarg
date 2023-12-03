@@ -8,6 +8,7 @@ fn main() {
 
     let clp = CommandLineParser::new("sub-command");
     let parser = clp
+        .about("Describe the base command line parser.  Let's make it a little long for fun.")
         .branch(
             Condition::new(Scalar::new(&mut sub), "sub")
                 // "0" is an undocumented sub-command.
@@ -21,6 +22,7 @@ fn main() {
         )
         .command(0, |sub_command| {
             sub_command
+                .about("Describe the 0 sub-command parser.  Let's make it a little long for fun.")
                 .add(Parameter::argument(Scalar::new(&mut arg_0), "arg"))
                 .add(Parameter::option(
                     Switch::new(&mut opt_0, true),
@@ -29,7 +31,9 @@ fn main() {
                 ))
         })
         .command(1, |sub_command| {
-            sub_command.add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
+            sub_command
+                .about("Describe the 1 sub-command parser.")
+                .add(Parameter::argument(Scalar::new(&mut arg_1), "arg"))
         })
         // Specify an argument-less & option-less sub-command by leaving the 'sub' untouched.
         .command(2, |sub_command| sub_command)

@@ -22,6 +22,7 @@ use crate::parser::{OptionParameter, ParseUnit, Parser, Printer};
 /// ```
 pub struct CommandLineParser<'a> {
     program: String,
+    about: Option<String>,
     option_parameters: Vec<OptionParameter>,
     argument_parameters: Vec<ArgumentParameter>,
     option_captures: Vec<OptionCapture<'a>>,
@@ -31,15 +32,50 @@ pub struct CommandLineParser<'a> {
 
 impl<'a> CommandLineParser<'a> {
     /// Create a command line parser.
+    ///
+    /// ### Example
+    /// ```
+    /// # use blarg_builder as blarg;
+    /// use blarg::CommandLineParser;
+    ///
+    /// let parser = CommandLineParser::new("program")
+    ///     .build();
+    ///
+    /// parser.parse_tokens(vec![].as_slice()).unwrap();
+    /// ```
     pub fn new(program: impl Into<String>) -> Self {
         Self {
             program: program.into(),
+            about: None,
             option_parameters: Vec::default(),
             argument_parameters: Vec::default(),
             option_captures: Vec::default(),
             argument_captures: Vec::default(),
             discriminator: None,
         }
+    }
+
+    /// Document the about message for this command line parser.
+    /// If repeated, only the final help message will apply.
+    ///
+    /// An about message documents the command line parser in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
+    ///
+    /// ### Example
+    /// ```
+    /// # use blarg_builder as blarg;
+    /// use blarg::CommandLineParser;
+    ///
+    /// let parser = CommandLineParser::new("program")
+    ///     .about("--this will get discarded--")
+    ///     .about("My program that does awesome stuff.  Check it out!")
+    ///     .build();
+    ///
+    /// parser.parse_tokens(vec![].as_slice()).unwrap();
+    /// ```
+    pub fn about(mut self, description: impl Into<String>) -> Self {
+        self.about.replace(description.into());
+        self
     }
 
     /// Add an argument/option to the command line parser.
@@ -133,13 +169,14 @@ impl<'a> CommandLineParser<'a> {
         )?;
         let command = ParseUnit::new(
             parser,
-            Printer::terminal(self.option_parameters, self.argument_parameters),
+            Printer::terminal(
+                self.program.clone(),
+                self.about,
+                self.option_parameters,
+                self.argument_parameters,
+            ),
         );
-        Ok(GeneralParser::command(
-            self.program,
-            command,
-            user_interface,
-        ))
+        Ok(GeneralParser::command(command, user_interface))
     }
 
     /// Build the command line parser as a Result.
@@ -197,7 +234,10 @@ impl<'a, B: std::str::FromStr + std::fmt::Display + PartialEq> SubCommandParser<
     /// let parser = CommandLineParser::new("program")
     ///     .branch(Condition::new(Scalar::new(&mut sub_command), "sub_command"))
     ///     .command("a".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_a), "value_a")))
-    ///     .command("b".to_string(), |sub| sub.add(Parameter::argument(Scalar::new(&mut value_b), "value_b")))
+    ///     .command("b".to_string(), |sub| {
+    ///         sub.about("Description for the sub-command 'b'.")
+    ///             .add(Parameter::argument(Scalar::new(&mut value_b), "value_b"))
+    ///     })
     ///     .build();
     ///
     /// parser.parse_tokens(vec!["a", "1"].as_slice()).unwrap();
@@ -255,7 +295,16 @@ impl<'a, B: std::str::FromStr + std::fmt::Display + PartialEq> SubCommandParser<
             let sub_parser = Parser::new(cp.option_captures, cp.argument_captures, None)?;
             let sub_command = ParseUnit::new(
                 sub_parser,
-                Printer::terminal(cp.option_parameters, cp.argument_parameters),
+                Printer::terminal(
+                    format!(
+                        "{program} {sub_program}",
+                        program = self.root.program,
+                        sub_program = cp.program
+                    ),
+                    cp.about,
+                    cp.option_parameters,
+                    cp.argument_parameters,
+                ),
             );
             sub_commands.insert(discriminee, sub_command);
         }
@@ -267,10 +316,15 @@ impl<'a, B: std::str::FromStr + std::fmt::Display + PartialEq> SubCommandParser<
         )?;
         let command = ParseUnit::new(
             parser,
-            Printer::terminal(self.root.option_parameters, self.root.argument_parameters),
+            Printer::terminal(
+                self.root.program.clone(),
+                self.root.about,
+                self.root.option_parameters,
+                self.root.argument_parameters,
+            ),
         );
         Ok(GeneralParser::sub_command(
-            self.root.program,
+            // self.root.program,
             command,
             sub_commands,
             user_interface,
@@ -340,6 +394,19 @@ impl<'a> SubCommand<'a> {
             .build_with_interface(Box::new(ConsoleInterface::default()))
     }
 
+    /// Document the about message for this sub-command.
+    /// If repeated, only the final help message will apply.
+    ///
+    /// An about message documents the sub-command in full sentence/paragraph format.
+    /// We recommend allowing `blarg` to format this field (ex: it is not recommended to use line breaks `'\n'`).
+    ///
+    /// See [`SubCommandParser::command`] for usage.
+    pub fn about(self, description: impl Into<String>) -> Self {
+        SubCommand {
+            inner: self.inner.about(description),
+        }
+    }
+
     /// Add an argument/option to the sub-command.
     ///
     /// The order of argument parameters corresponds to their positional order during parsing.
@@ -372,6 +439,7 @@ mod tests {
         let parser = clp.build_parser().unwrap();
 
         // Verify
+        assert_eq!(parser.details(), ("program".to_string(), None));
         parser.parse_tokens(empty::slice()).unwrap();
     }
 
@@ -392,8 +460,8 @@ mod tests {
         // Setup
         let mut flag: bool = false;
         let mut items: Vec<u32> = Vec::default();
-        let mut clp = CommandLineParser::new("program");
-        clp = clp
+        let clp = CommandLineParser::new("program")
+            .about("abc def")
             .add(Parameter::option(
                 Switch::new(&mut flag, true),
                 "flag",
@@ -408,6 +476,11 @@ mod tests {
         let parser = clp.build_parser().unwrap();
 
         // Verify
+        assert_eq!(
+            parser.details(),
+            ("program".to_string(), Some("abc def".to_string()))
+        );
+
         // We testing that build sets up the right parser.
         // So the verification involves invoking the parser with the various permutations.
         parser.parse_tokens(tokens.as_slice()).unwrap();
@@ -455,7 +528,7 @@ mod tests {
                 ))
             })
             .command(1, |sub| {
-                sub.add(Parameter::argument(
+                sub.about("abc def").add(Parameter::argument(
                     Collection::new(&mut items_1, Nargs::Any),
                     "item1",
                 ))
@@ -465,6 +538,17 @@ mod tests {
         let parser = scp.build_parser().unwrap();
 
         // Verify
+        assert_eq!(parser.details(), ("program".to_string(), None));
+        assert_eq!(parser.sub_details("x"), None);
+        assert_eq!(
+            parser.sub_details("0"),
+            Some(("program 0".to_string(), None))
+        );
+        assert_eq!(
+            parser.sub_details("1"),
+            Some(("program 1".to_string(), Some("abc def".to_string())))
+        );
+
         // We testing that build sets up the right parser.
         // So the verification involves invoking the parser with the various permutations.
         parser.parse_tokens(tokens.as_slice()).unwrap();
@@ -550,6 +634,8 @@ mod tests {
         let parser = scp.build_parser().unwrap();
 
         // Verify
+        assert_eq!(parser.details(), ("program".to_string(), None));
+
         // We testing that build sets up the right parser.
         // So the verification involves invoking the parser with the various permutations.
         parser.parse_tokens(tokens.as_slice()).unwrap();
