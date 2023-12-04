@@ -8,7 +8,7 @@ use crate::parser::{
     ColumnRenderer, LeftWidth, MiddleWidth, PaddingWidth, RightWidth, TotalWidth,
     MINIMUM_MIDDLE_WIDTH,
 };
-#[cfg(feature = "debug")]
+#[cfg(feature = "tracing_debug")]
 use tracing::debug;
 
 pub(crate) struct OptionParameter {
@@ -312,7 +312,7 @@ impl Printer {
 
         let column_renderer = match &self.terminal_width {
             Some(tw) => {
-                #[cfg(feature = "debug")]
+                #[cfg(feature = "tracing_debug")]
                 {
                     debug!("Found the terminal width: {tw}.");
                 }
@@ -326,7 +326,7 @@ impl Printer {
                 )
             }
             None => {
-                #[cfg(feature = "debug")]
+                #[cfg(feature = "tracing_debug")]
                 {
                     debug!(
                         "Could not find the terminal width - using default renderer configuration."

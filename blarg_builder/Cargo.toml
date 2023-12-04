@@ -10,7 +10,7 @@ repository.workspace = true
 
 [features]
 unit_test = []
-debug = ["tracing"]
+tracing_debug = ["tracing"]
 
 [dependencies]
 thiserror = "^1.0"

@@ -5,6 +5,9 @@ use crate::constant::*;
 use crate::matcher::*;
 use crate::InvalidCapture;
 
+#[cfg(feature = "tracing_debug")]
+use tracing::debug;
+
 // We need a (dyn .. [ignoring T] ..) here in order to put all the fields of varying types T under one collection.
 // In other words, we want the bottom of the object graph to include the types T, but up here we want to work across all T.
 pub(crate) type OptionCapture<'a> = (OptionConfig, Box<(dyn AnonymousCapturable + 'a)>);
@@ -27,11 +30,11 @@ impl From<TokenMatcherError> for ConfigError {
 
 #[derive(Debug, Error)]
 pub(crate) enum ParseError {
-    #[error("Parse error for matching: {0}")]
+    #[error("Parse error during matching: {0}")]
     MatchPhase(MatchError),
-    #[error("Parse error for capture: {0}")]
+    #[error("Parse error during capture: {0}")]
     CapturePhase(InvalidCapture),
-    #[error("Parse error for branching: {0}")]
+    #[error("Parse error during branching: {0}")]
     BranchingPhase(String),
 }
 
@@ -137,6 +140,13 @@ impl<'a> Parser<'a> {
             discriminator,
         } = self;
 
+        #[cfg(feature = "tracing_debug")]
+        {
+            debug!(
+                "Running parser match phase: discriminator={discriminator:?}, tokens={tokens:?}."
+            );
+        }
+
         let mut token_iter = tokens.iter();
         let minimal_consume = discriminator.is_some();
         // 1. Feed the raw token strings to the matcher.
@@ -166,6 +176,11 @@ impl<'a> Parser<'a> {
             Ok(matches) => Ok(matches),
             Err((offset, e, _)) => Err((offset, ParseError::MatchPhase(e))),
         }?;
+
+        #[cfg(feature = "tracing_debug")]
+        {
+            debug!("Running parser capture phase: {matches:?}.");
+        }
 
         let mut discriminee: Option<OffsetValue> = None;
 

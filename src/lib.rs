@@ -52,12 +52,12 @@
 //! Sum: 6
 //!
 //! $ summer
-//! Parse error for matching: not enough tokens provided to parameter 'ITEM'.
+//! Parse error during matching: not enough tokens provided to parameter 'ITEM'.
 //!
 //! ^
 //!
 //! $ summer 1 blah
-//! Parse error for capture: cannot convert 'blah' to u32.
+//! Parse error during capture: cannot convert 'blah' to u32.
 //! 1 blah
 //!   ^
 //! ```
@@ -147,7 +147,7 @@
 //! argument-less & option-less
 //!
 //! $ sub-command 3
-//! Parse error for branching: unknown sub-command '3'.
+//! Parse error during branching: unknown sub-command '3'.
 //! 3
 //! ^
 //! ```
@@ -272,6 +272,7 @@
 //!
 //! # Features
 //! * `unit_test`: For features that help with unit testing.
-//! * `debug`: For features to help debug `blarg`.
+//! See [`SubCommand`].
+//! * `tracing_debug`: Enables debug of `blarg` itself via [`tracing`](https://docs.rs/tracing/latest/tracing/).
 pub mod derive;
 pub use blarg_builder::*;

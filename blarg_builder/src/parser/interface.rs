@@ -1,7 +1,7 @@
 use crate::parser::base::ParseError;
 use crate::parser::ErrorContext;
 
-#[cfg(feature = "debug")]
+#[cfg(feature = "tracing_debug")]
 use tracing::debug;
 
 #[derive(Debug)]
@@ -105,7 +105,7 @@ impl ColumnRenderer {
         let guided_middle = std::cmp::max(middle.0, MINIMUM_MIDDLE_WIDTH);
 
         if guided_middle + non_middle <= target_total_width {
-            #[cfg(feature = "debug")]
+            #[cfg(feature = "tracing_debug")]
             {
                 debug!("Columns {non_middle} and middle fit within the target total {target_total_width}.  Selecting middle: {guided_middle}.");
             }
@@ -113,16 +113,16 @@ impl ColumnRenderer {
             Self::new(padding, left, MiddleWidth(guided_middle), rights)
         } else if non_middle < total_width.0 {
             let calculated_middle = std::cmp::max(total_width.0 - non_middle, MINIMUM_MIDDLE_WIDTH);
-            #[cfg(feature = "debug")]
+            #[cfg(feature = "tracing_debug")]
             {
-                debug!("Columns {non_middle} fits within the total {total_width}.  Selecting middle: {calculated_middle}.");
+                debug!("Columns {non_middle} fits within the total {tw}.  Selecting middle: {calculated_middle}.", tw = total_width.0);
             }
 
             Self::new(padding, left, MiddleWidth(calculated_middle), rights)
         } else {
-            #[cfg(feature = "debug")]
+            #[cfg(feature = "tracing_debug")]
             {
-                debug!("Columns {non_middle} do not fit within the total {total_width}.  Selecting middle: {MINIMUM_MIDDLE_WIDTH}.");
+                debug!("Columns {non_middle} do not fit within the total {tw}.  Selecting middle: {MINIMUM_MIDDLE_WIDTH}.", tw = total_width.0);
             }
 
             Self::new(padding, left, MiddleWidth(MINIMUM_MIDDLE_WIDTH), rights)
